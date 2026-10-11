@@ -1,5 +1,8 @@
 # Budget for the whole observability stack. Expected use: Prometheus ~300Mi,
-# Grafana ~150Mi, Loki ~200Mi, Alloy ~150Mi, the rest under 100Mi together.
+# Grafana ~150Mi, Loki ~200Mi, Alloy ~150Mi, the rest under 100Mi together
+# (measured: ~1.5Gi in all, Grafana's sidecars included). Limits are ceilings,
+# not reservations; their sum already passed 3Gi with the sidecars and the
+# operator's admission jobs, which the old cap then refused to start.
 apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -9,7 +12,7 @@ spec:
   hard:
     requests.cpu: "2"
     requests.memory: 1536Mi
-    limits.memory: 3Gi
+    limits.memory: 4Gi
     persistentvolumeclaims: "4"
     services.nodeports: "0"
 ---
