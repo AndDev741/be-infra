@@ -131,6 +131,7 @@ spec:
       # is not in this public repo; Grafana expands $VARS in provisioning files.
       envFromSecrets:
         - name: grafana-smtp
+        - name: grafana-beyou-db
       alerting:
         contactpoints.yaml:
           apiVersion: 1
@@ -339,6 +340,23 @@ spec:
           type: loki
           url: http://loki.monitoring.svc:3100
           access: proxy
+        # The beyou database, read-only, for the product dashboard. The role can
+        # only SELECT, and only in that database (data/postgres.yaml).
+        - name: Beyou Postgres
+          uid: beyou-postgres
+          type: grafana-postgresql-datasource
+          url: pg-rw.data.svc:5432
+          user: beyou_readonly
+          access: proxy
+          editable: false
+          jsonData:
+            database: beyou
+            sslmode: require
+            postgresVersion: 1700
+            maxOpenConns: 2
+            maxIdleConns: 1
+          secureJsonData:
+            password: $BEYOU_DB_PASSWORD
       sidecar:
         dashboards:
           # Dashboards are ConfigMaps labelled grafana_dashboard=1 in any

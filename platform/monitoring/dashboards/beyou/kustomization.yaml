@@ -13,4 +13,5 @@ configMapGenerator:
       - beyou-ai-agent.json
       - beyou-containers.json
       - beyou-logs.json
+      - beyou-product.json
       - beyou-service-health.json
