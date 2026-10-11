@@ -9,8 +9,8 @@ pieces they share (ingress, and soon monitoring) live under `platform/`.
 Cloudflare Tunnel ──> NodePort 30000 ──> Traefik (ns: ingress) ── Host header ──┐
                                                                                  │
         ┌──────────────────────────┬───────────────────────────┬────────────────┘
-   ns: befree                 ns: beconscient              ns: beyou (planned)
-   nginx → backend            nginx → backend
+   ns: befree                 ns: beconscient              ns: beyou
+   nginx → backend            nginx → backend              app + docs nginx → compose backend
    postgres (shared, see below)   nightly backup, weekly restore drill
 ```
 
@@ -30,7 +30,7 @@ Cloudflare Tunnel ──> NodePort 30000 ──> Traefik (ns: ingress) ── Ho
 Commit and push to `main`. Flux polls every few minutes; to apply now:
 
 ```sh
-flux reconcile kustomization <platform|befree|beconscient> --with-source
+flux reconcile kustomization <platform|befree|beconscient|beyou> --with-source
 flux get kustomizations          # health of each app
 ```
 
@@ -109,6 +109,17 @@ node's loopback (`localhost:5000`) and are pinned by digest: after
 `deploy/scripts/publish-images.sh`, commit the new digests to
 `apps/beconscient/{backend,frontend}.yaml`. Database setup, backup and restore
 procedures are in `beConscient/deploy/README.md`.
+
+### beyou
+
+Moving in from `Beyou-dev-env`'s compose stack in phases. Today the web app
+(app.beyouweb.com) and the docs site (docs.beyouweb.com) run here; the backend,
+Postgres and the uploads are still compose containers. Both nginx images proxy
+`/api/v1/` to `backend:8099`, so `apps/beyou/backend-bridge.yaml` gives them a
+`backend` Service that relays to the compose backend on the host (temporary).
+
+Images are pinned by digest. To deploy a new build, commit the new digest to
+`apps/beyou/{frontend,docs}.yaml`.
 
 ## Bootstrapping a new cluster
 

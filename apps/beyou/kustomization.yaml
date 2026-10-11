@@ -1,0 +1,12 @@
+# The main app. Phase 2: the web app and the docs site; the backend, its
+# database and the uploads are still in Beyou-dev-env's compose stack.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - network-policy.yaml
+  - backend-bridge.yaml
+  - frontend.yaml
+  - docs.yaml
+  - ingress.yaml

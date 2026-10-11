@@ -1,0 +1,31 @@
+# What this app may take from the node, so one app can never starve the others.
+# Today: the frontend, the docs site and the backend bridge, requests 40Mi and
+# limits 160Mi. Raised when the backend and its database move in.
+# There is no CPU limit on purpose: a quota on CPU requests is enough to keep
+# scheduling honest, and CPU limits only throttle a node that has idle cores.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: beyou
+  namespace: beyou
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 256Mi
+    limits.memory: 512Mi
+    pods: "10"
+    persistentvolumeclaims: "2"
+    services.nodeports: "0"
+---
+# Defaults for any container that does not declare its own (the quota above
+# refuses a pod without requests and limits, so these keep one-off pods working).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+  namespace: beyou
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 20m, memory: 32Mi }
+      default: { memory: 128Mi }

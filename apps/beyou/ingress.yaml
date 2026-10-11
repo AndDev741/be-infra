@@ -1,0 +1,28 @@
+# Traefik (platform/traefik) routes each hostname to its nginx. api.beyouweb.com
+# stays on the compose backend until phase 3.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: beyou
+  namespace: beyou
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: app.beyouweb.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: beyou-frontend
+                port: { number: 80 }
+    - host: docs.beyouweb.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: beyou-docs
+                port: { number: 80 }
