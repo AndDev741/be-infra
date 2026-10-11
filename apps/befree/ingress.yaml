@@ -1,0 +1,19 @@
+# Traefik (platform/traefik) routes this hostname to the app's nginx, which
+# serves the page and proxies the API itself, exactly as the NodePort did.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: befree
+  namespace: befree
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: befree.beyouweb.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: befree-frontend
+                port: { number: 80 }

@@ -1,0 +1,45 @@
+# One Kustomization per app, so a broken app never blocks the others from
+# reconciling, and `flux get kustomizations` shows the health of each one.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: befree
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: platform
+  interval: 10m
+  retryInterval: 1m
+  path: ./apps/befree
+  prune: true
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: beconscient
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: platform
+    # Its database lives in the befree namespace until the shared `data` namespace exists.
+    - name: befree
+  interval: 10m
+  retryInterval: 1m
+  path: ./apps/beconscient
+  prune: true
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

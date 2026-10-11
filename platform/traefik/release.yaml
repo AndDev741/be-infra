@@ -1,0 +1,60 @@
+# The single way into the cluster. The Cloudflare Tunnel on the host sends
+# every hostname to NodePort 30000 and Traefik routes on the Host header to
+# each app's Ingress. TLS ends at Cloudflare, so only plain HTTP is served.
+#
+# k3s ships its own Traefik, but it is disabled on this node (--disable traefik)
+# so that this one, versioned here, is the only ingress controller.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: traefik
+  namespace: ingress
+spec:
+  interval: 24h
+  url: https://traefik.github.io/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: traefik
+  namespace: ingress
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: traefik
+      version: 41.7.1
+      sourceRef:
+        kind: HelmRepository
+        name: traefik
+  values:
+    ingressClass:
+      enabled: true
+      isDefaultClass: true
+    providers:
+      kubernetesIngress:
+        enabled: true
+      kubernetesCRD:
+        enabled: true
+    service:
+      spec:
+        # servicelb would bind 80/443 on every interface of the node; a fixed
+        # NodePort is what the tunnel already uses for the other apps.
+        type: NodePort
+    ports:
+      web:
+        nodePort: 30000
+        # Requests only arrive through the tunnel, which sets X-Forwarded-For and
+        # Cf-Connecting-IP. Without this Traefik would replace them with the
+        # node's own address and the apps would see every client as 10.42.0.1.
+        forwardedHeaders:
+          insecure: true
+      websecure:
+        expose:
+          default: false
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { memory: 192Mi }
+    logs:
+      access:
+        enabled: true

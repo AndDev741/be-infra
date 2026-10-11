@@ -1,0 +1,9 @@
+# Nothing secret is ever committed in clear text. Secrets live in *.sops.yaml,
+# encrypted with the age key in ~/.config/sops/age/keys.txt (never in this repo).
+*.env
+.env*
+*.bak*
+*.agekey
+keys.txt
+kubeconfig*
+*.dec.yaml

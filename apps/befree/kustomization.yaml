@@ -1,0 +1,18 @@
+# Moved from beFree/deploy. Secrets come from secrets.sops.yaml; the dev-only
+# befree-db Secret that beFree/deploy/00-namespace.yaml carried is deliberately
+# not here, because applying it would overwrite the production password.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - network-policy.yaml
+  - secrets/befree-auth.sops.yaml
+  - secrets/befree-db.sops.yaml
+  - secrets/befree-deepseek.sops.yaml
+  - secrets/befree-transcription.sops.yaml
+  - secrets/befree-whatsapp.sops.yaml
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml

@@ -1,0 +1,8 @@
+# Only the data of Secrets is encrypted; names and namespaces stay readable so
+# a diff still shows which secret changed. The private half of this age key is
+# in ~/.config/sops/age/keys.txt on beyou-server and in the password manager,
+# and in-cluster as flux-system/sops-age.
+creation_rules:
+  - path_regex: .*\.sops\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1pc6cuya8t4q973p386zmc3vpxwkx3trafl3uwlfm449wfxpfusvsg7afuu

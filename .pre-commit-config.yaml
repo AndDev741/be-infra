@@ -1,0 +1,8 @@
+# The push protection on GitHub catches known token formats; gitleaks also
+# catches generic secrets before they ever reach a commit. scripts/install-hooks.sh
+# wires it in without needing the pre-commit tool.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

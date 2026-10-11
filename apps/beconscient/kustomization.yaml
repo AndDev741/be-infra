@@ -1,0 +1,15 @@
+# Moved from beConscient/deploy. Secrets come from secrets.sops.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - network-policy.yaml
+  - secrets/beconscient-auth.sops.yaml
+  - secrets/beconscient-backup.sops.yaml
+  - secrets/beconscient-db.sops.yaml
+  - secrets/beconscient-hpke.sops.yaml
+  - backend.yaml
+  - frontend.yaml
+  - backup.yaml
+  - ingress.yaml

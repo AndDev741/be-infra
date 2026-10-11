@@ -1,0 +1,60 @@
+# Same model as beconscient: deny everything, then open only what is used.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: befree
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Reached by Traefik and, until the tunnel moves to Traefik, by the NodePort.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-from-anywhere
+  namespace: befree
+spec:
+  podSelector:
+    matchLabels: { app: befree-frontend }
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-from-frontend
+  namespace: befree
+spec:
+  podSelector:
+    matchLabels: { app: befree-backend }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: befree-frontend }
+      ports:
+        - port: 8080
+---
+# This Postgres also holds the beconscient database (its backend, nightly
+# backup and weekly restore drill all connect here). That cross-namespace
+# rule goes away when the instance moves to the shared `data` namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-from-apps
+  namespace: befree
+spec:
+  podSelector:
+    matchLabels: { app: postgres }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: befree-backend }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: beconscient }
+      ports:
+        - port: 5432
