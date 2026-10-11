@@ -1,7 +1,8 @@
 # The two nginx pods are reachable only from Traefik, which is where the tunnel
-# connects. Everything else in the cluster is refused.
+# connects; the backend only from them, Traefik (api.beyouweb.com) and
+# Prometheus. Everything else in the cluster is refused.
 #
-# The backend bridge runs on the host network, where NetworkPolicy does not
+# The bridges to compose run on the host network, where NetworkPolicy does not
 # apply; see backend-bridge.yaml for what that exposes.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -28,3 +29,38 @@ spec:
             matchLabels: { kubernetes.io/metadata.name: ingress }
       ports:
         - port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-from-web
+  namespace: beyou
+spec:
+  podSelector:
+    matchLabels: { app: beyou-backend }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - { key: app, operator: In, values: [beyou-frontend, beyou-docs] }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress }
+      ports:
+        - port: 8099
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-metrics-from-monitoring
+  namespace: beyou
+spec:
+  podSelector:
+    matchLabels: { app: beyou-backend }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports:
+        - port: 9091

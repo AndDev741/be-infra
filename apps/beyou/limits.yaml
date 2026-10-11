@@ -1,6 +1,6 @@
 # What this app may take from the node, so one app can never starve the others.
-# Today: the frontend, the docs site and the backend bridge, requests 40Mi and
-# limits 160Mi. Raised when the backend and its database move in.
+# Today: requests ~850Mi and limits ~1.3Gi (the backend is 768Mi/1Gi of it), plus
+# the backup jobs. The database is in the data namespace, with its own quota.
 # There is no CPU limit on purpose: a quota on CPU requests is enough to keep
 # scheduling honest, and CPU limits only throttle a node that has idle cores.
 apiVersion: v1
@@ -11,10 +11,10 @@ metadata:
 spec:
   hard:
     requests.cpu: "1"
-    requests.memory: 256Mi
-    limits.memory: 512Mi
+    requests.memory: 1536Mi
+    limits.memory: 2560Mi
     pods: "10"
-    persistentvolumeclaims: "2"
+    persistentvolumeclaims: "3"
     services.nodeports: "0"
 ---
 # Defaults for any container that does not declare its own (the quota above

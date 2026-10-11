@@ -52,6 +52,9 @@ metadata:
 spec:
   dependsOn:
     - name: platform
+    # Its database, and the ServiceMonitor CRD.
+    - name: data
+    - name: monitoring
   interval: 10m
   retryInterval: 1m
   path: ./apps/beyou

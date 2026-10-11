@@ -1,12 +1,15 @@
-# The main app. Phase 2: the web app and the docs site; the backend, its
-# database and the uploads are still in Beyou-dev-env's compose stack.
+# The main app: web app, docs site, backend (database in data/). Error tracking
+# is still GlitchTip in Beyou-dev-env's compose stack (glitchtip-bridge.yaml).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - namespace.yaml
   - limits.yaml
   - network-policy.yaml
+  - secrets/beyou-backend.sops.yaml
   - backend-bridge.yaml
+  - glitchtip-bridge.yaml
+  - backend.yaml
   - frontend.yaml
   - docs.yaml
   - ingress.yaml
