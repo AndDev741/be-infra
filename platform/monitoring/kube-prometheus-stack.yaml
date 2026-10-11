@@ -3,7 +3,8 @@
 # plus Grafana. Each app can add its own ServiceMonitor/PodMonitor in its own
 # namespace; Prometheus picks up all of them.
 #
-# Alertmanager is off: alerts are Grafana-managed and go out by email.
+# Alertmanager is off: alerts are Grafana-managed (grafana.alerting below)
+# and go out by email.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
@@ -125,6 +126,213 @@ spec:
         analytics:
           reporting_enabled: false
           check_for_updates: false
+      # Mail goes out through the same Gmail SMTP GlitchTip uses (secret
+      # grafana-smtp). ALERT_EMAIL comes from that secret too, so the address
+      # is not in this public repo; Grafana expands $VARS in provisioning files.
+      envFromSecrets:
+        - name: grafana-smtp
+      alerting:
+        contactpoints.yaml:
+          apiVersion: 1
+          contactPoints:
+            - orgId: 1
+              name: email
+              receivers:
+                - uid: email
+                  type: email
+                  settings:
+                    addresses: $ALERT_EMAIL
+                    singleEmail: true
+        policies.yaml:
+          apiVersion: 1
+          policies:
+            - orgId: 1
+              receiver: email
+              group_by: [alertname, namespace]
+              group_wait: 1m
+              group_interval: 10m
+              repeat_interval: 12h
+        rules.yaml:
+          apiVersion: 1
+          groups:
+            - orgId: 1
+              name: host
+              folder: Alerts
+              interval: 1m
+              rules:
+              - uid: host-memory
+                title: Host memory almost full
+                condition: C
+                for: 10m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "Less than 10% of RAM available for 10 minutes"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: '1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [0.9] }
+              - uid: host-swap
+                title: Host swapping heavily
+                condition: C
+                for: 30m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "More than half of the swap in use for 30 minutes"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: '1 - node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [0.5] }
+              - uid: host-disk
+                title: Root disk almost full
+                condition: C
+                for: 15m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "Root filesystem above 85% for 15 minutes"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: '1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [0.85] }
+            - orgId: 1
+              name: workloads
+              folder: Alerts
+              interval: 1m
+              rules:
+              - uid: pod-restarting
+                title: Container restarting
+                condition: C
+                for: 0m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "A container restarted more than twice in 15 minutes"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: 'sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total[15m]))'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [2] }
+              - uid: pod-not-running
+                title: Pod stuck
+                condition: C
+                for: 10m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "A pod has been Pending, Failed or Unknown for 10 minutes"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: 'sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Failed|Unknown"})'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [0] }
+              - uid: deployment-unavailable
+                title: Deployment missing replicas
+                condition: C
+                for: 10m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "A Deployment has had unavailable replicas for 10 minutes"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: 'sum by (namespace, deployment) (kube_deployment_status_replicas_unavailable)'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [0] }
+              - uid: target-down
+                title: Scrape target down
+                condition: C
+                for: 5m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "A metrics endpoint has not answered for 5 minutes (labels say which)"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: 'up'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: lt, params: [1] }
       additionalDataSources:
         - name: Loki
           uid: loki

@@ -1,0 +1,50 @@
+# Web UI for the cluster, with the Flux plugin. Two locks in front of it:
+#   1. Cloudflare Access on headlamp.beyouweb.com (one-time PIN to the owner's
+#      email), configured in the Cloudflare dashboard, not here;
+#   2. Headlamp itself asks for a ServiceAccount token (see admin.yaml).
+# The Headlamp pod gets no cluster rights of its own: every request runs with
+# the token the user signs in with.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  interval: 24h
+  url: https://kubernetes-sigs.github.io/headlamp/
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: headlamp
+      version: 0.45.0
+      sourceRef:
+        kind: HelmRepository
+        name: headlamp
+  values:
+    clusterRoleBinding:
+      create: false
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+    ingress:
+      enabled: true
+      ingressClassName: traefik
+      hosts:
+        - host: headlamp.beyouweb.com
+          paths:
+            - path: /
+              type: Prefix
+    pluginsManager:
+      enabled: true
+      configContent: |
+        plugins:
+          - name: flux
+            source: https://artifacthub.io/packages/headlamp/headlamp-plugins/headlamp_flux
+            version: 0.7.0

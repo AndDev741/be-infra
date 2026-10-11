@@ -9,7 +9,9 @@ set -euo pipefail
 gitleaks git --staged --redact --no-banner
 for f in $(git diff --cached --name-only --diff-filter=ACM); do
   [ -f "$f" ] || continue
-  if grep -qE '^kind: Secret' "$f" && ! grep -q '^sops:' "$f"; then
+  # A service-account-token Secret carries no data in git; Kubernetes fills it.
+  if grep -qE '^kind: Secret' "$f" && ! grep -q '^sops:' "$f" \
+     && ! grep -q '^type: kubernetes.io/service-account-token' "$f"; then
     echo "refusing $f: a Secret must be encrypted with sops (name it *.sops.yaml)" >&2
     exit 1
   fi

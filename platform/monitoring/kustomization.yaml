@@ -5,6 +5,7 @@ resources:
   - limits.yaml
   - network-policy.yaml
   - secrets/grafana-admin.sops.yaml
+  - secrets/grafana-smtp.sops.yaml
   - kube-prometheus-stack.yaml
   - loki.yaml
   - alloy.yaml
