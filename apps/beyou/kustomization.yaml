@@ -7,7 +7,6 @@ resources:
   - limits.yaml
   - network-policy.yaml
   - secrets/beyou-backend.sops.yaml
-  - backend-bridge.yaml
   - glitchtip-bridge.yaml
   - backend.yaml
   - frontend.yaml

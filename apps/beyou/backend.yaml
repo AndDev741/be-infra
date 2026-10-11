@@ -23,7 +23,7 @@ metadata:
   name: beyou-backend
   namespace: beyou
 spec:
-  replicas: 0
+  replicas: 1
   strategy: { type: Recreate }
   selector:
     matchLabels: { app: beyou-backend }
@@ -83,12 +83,12 @@ spec:
           persistentVolumeClaim:
             claimName: beyou-uploads
 ---
-# Metrics only for now; at the cutover the `backend` Service for the API moves
-# here from backend-bridge.yaml.
+# `backend` is the upstream name baked into both nginx images, and Traefik's
+# target for api.beyouweb.com.
 apiVersion: v1
 kind: Service
 metadata:
-  name: beyou-backend
+  name: backend
   namespace: beyou
   labels: { app: beyou-backend }
 spec:

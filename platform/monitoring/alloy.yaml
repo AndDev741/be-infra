@@ -158,24 +158,12 @@ spec:
             rule {
               source_labels = ["__meta_docker_container_label_com_docker_compose_service", "__meta_docker_port_private"]
               separator     = ":"
-              regex         = "backend:9091|cadvisor:8080|postgres-exporter:9187|glitchtip:8000"
+              regex         = "cadvisor:8080|glitchtip:8000"
               action        = "keep"
             }
             rule {
               source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
               target_label  = "job"
-            }
-            rule {
-              source_labels = ["job"]
-              regex         = "backend"
-              replacement   = "beyou-backend"
-              target_label  = "job"
-            }
-            rule {
-              source_labels = ["job"]
-              regex         = "beyou-backend"
-              replacement   = "/actuator/prometheus"
-              target_label  = "__metrics_path__"
             }
           }
 

@@ -3,7 +3,7 @@
 # Prometheus. Everything else in the cluster is refused.
 #
 # The bridges to compose run on the host network, where NetworkPolicy does not
-# apply; see backend-bridge.yaml for what that exposes.
+# apply; see glitchtip-bridge.yaml for what that exposes.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

@@ -1,5 +1,5 @@
 # The web app (app.beyouweb.com), built by Beyou-Frontend CI. nginx serves the
-# SPA and proxies /api/v1/ to `backend` (see backend-bridge.yaml).
+# SPA and proxies /api/v1/ to `backend` (backend.yaml).
 #
 # Pinned by digest. Flux image automation (images.yaml) commits the new digest
 # here when CI pushes a new `latest`.

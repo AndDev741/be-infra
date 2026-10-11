@@ -2,9 +2,12 @@
 #
 # The backend sends error reports (SENTRY_DSN) and its scheduler heartbeats to
 # URLs naming `glitchtip:8000`, the compose service. GlitchTip is published on
-# the host's 127.0.0.1:8000 only, so this is the same relay as
-# backend-bridge.yaml: socat on the host network, bound to the cni0 address
-# (10.42.0.1) only, forwarding to 127.0.0.1:8000, behind a `glitchtip` Service.
+# the host's 127.0.0.1:8000 only. A pod cannot reach the host's loopback, and
+# Docker drops forwarded traffic to container IPs, so socat on the host network
+# relays from the cni0 address (10.42.0.1, the node as seen from pods) to
+# 127.0.0.1:8000, behind a `glitchtip` Service. It binds that address only, so
+# nothing on the LAN or tailnet can use it. NetworkPolicy does not apply to
+# host-network pods: every pod in the cluster can reach this port.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

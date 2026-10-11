@@ -1,6 +1,6 @@
 # The documentation site (docs.beyouweb.com), built by Beyou-docs-ui CI. Its pages
 # are prerendered into the image, so a content change ships as a new image.
-# nginx proxies /api/v1/ to `backend` (see backend-bridge.yaml).
+# nginx proxies /api/v1/ to `backend` (backend.yaml).
 #
 # Pinned by digest. Flux image automation (images.yaml) commits the new digest
 # here when CI pushes a new `latest`.
