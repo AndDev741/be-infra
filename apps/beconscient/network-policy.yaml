@@ -1,6 +1,6 @@
 # Only the page's nginx may reach the backend. Everything else in the cluster
-# (including other applications' pods) is refused. The nginx itself stays
-# reachable through its NodePort, which is where the TLS proxy connects.
+# (including other applications' pods) is refused. The nginx itself is
+# reachable only from Traefik, which is where the tunnel connects.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -29,12 +29,15 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: frontend-from-anywhere
+  name: frontend-from-ingress
   namespace: beconscient
 spec:
   podSelector:
     matchLabels: { app: beconscient-frontend }
   policyTypes: [Ingress]
   ingress:
-    - ports:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress }
+      ports:
         - port: 8080

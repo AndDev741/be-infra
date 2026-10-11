@@ -84,7 +84,7 @@ metadata:
   name: befree-backend
   namespace: befree
 spec:
-  # Reached only through the nginx pod; 30080 on the node now belongs to it
+  # Reached only through the nginx pod
   type: ClusterIP
   selector:
     app: befree-backend

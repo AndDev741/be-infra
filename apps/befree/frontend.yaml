@@ -1,6 +1,7 @@
-# nginx serves the built SPA and is the only thing exposed on the node. It
+# nginx serves the built SPA. It
 # proxies /api and /webhooks to the backend, so browser and Meta both see one
-# origin and the session cookie needs no CORS exception.
+# origin and the session cookie needs no CORS exception. Traffic arrives only
+# through Traefik (apps/befree/ingress.yaml).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,10 +36,9 @@ metadata:
   name: befree-frontend
   namespace: befree
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: befree-frontend
   ports:
     - port: 80
       targetPort: 8080
-      nodePort: 30080

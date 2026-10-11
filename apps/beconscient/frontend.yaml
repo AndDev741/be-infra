@@ -1,6 +1,6 @@
 # The page, served by nginx, which also proxies /api/ and /ingest/ to the
-# backend. The NodePort is the only exposure on the node; a tunnel or reverse
-# proxy terminates TLS in front of it.
+# backend. It is reached only through Traefik (ingress.yaml), behind the
+# Cloudflare Tunnel that terminates TLS.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,9 +32,8 @@ metadata:
   name: beconscient-frontend
   namespace: beconscient
 spec:
-  type: NodePort
+  type: ClusterIP
   selector: { app: beconscient-frontend }
   ports:
     - port: 80
       targetPort: 8080
-      nodePort: 30081

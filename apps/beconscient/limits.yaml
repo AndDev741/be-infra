@@ -14,7 +14,7 @@ spec:
     limits.memory: 1280Mi
     pods: "15"
     persistentvolumeclaims: "4"
-    services.nodeports: "1"
+    services.nodeports: "0"
 ---
 # Defaults for any container that does not declare its own (the quota above
 # refuses a pod without requests and limits, so these keep one-off pods working).
