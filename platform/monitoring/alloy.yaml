@@ -1,0 +1,199 @@
+# One collector on the node for everything that is not scraped by Prometheus
+# directly:
+#   - logs of every pod (files under /var/log/pods)        -> Loki
+#   - logs of every Docker container (the compose side)    -> Loki
+#   - metrics of the beyou stack still in compose          -> Prometheus (remote write)
+#
+# It uses the host network because Docker drops forwarded traffic to ports a
+# container does not publish, so a pod cannot reach backend:9091, cAdvisor or
+# the exporters; the host itself can. The Docker half goes away once beyou has
+# moved (roadmap phases 3-4); job names match the old compose Prometheus so the
+# existing beyou dashboards keep working.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  interval: 24h
+  url: https://grafana.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: monitoring
+spec:
+  # Its ServiceMonitor needs the CRDs that kube-prometheus-stack installs.
+  dependsOn:
+    - name: kube-prometheus-stack
+  interval: 1h
+  chart:
+    spec:
+      chart: alloy
+      version: 1.13.1
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+  values:
+    controller:
+      type: daemonset
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      volumes:
+        extra:
+          - name: docker-sock
+            hostPath:
+              path: /var/run/docker.sock
+              type: Socket
+    serviceMonitor:
+      enabled: true
+    alloy:
+      # 12345 is taken on the host by the compose Alloy until it is retired.
+      listenPort: 12350
+      mounts:
+        varlog: true
+        extra:
+          - name: docker-sock
+            mountPath: /var/run/docker.sock
+            readOnly: true
+      resources:
+        requests: { cpu: 50m, memory: 96Mi }
+        limits: { memory: 384Mi }
+      configMap:
+        content: |
+          // ---------- Kubernetes: pod logs ----------
+          discovery.kubernetes "pods" {
+            role = "pod"
+          }
+
+          discovery.relabel "pod_logs" {
+            targets = discovery.kubernetes.pods.targets
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_name"]
+              target_label  = "container"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+              target_label  = "app"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_label_app"]
+              regex         = "(.+)"
+              target_label  = "app"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+              separator     = "/"
+              target_label  = "job"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+              separator     = "/"
+              target_label  = "__path__"
+              replacement   = "/var/log/pods/*$1/*.log"
+            }
+          }
+
+          local.file_match "pod_logs" {
+            path_targets = discovery.relabel.pod_logs.output
+          }
+
+          loki.source.file "pod_logs" {
+            targets    = local.file_match.pod_logs.targets
+            forward_to = [loki.process.pod_logs.receiver]
+          }
+
+          loki.process "pod_logs" {
+            stage.cri {}
+            forward_to = [loki.write.local.receiver]
+          }
+
+          // ---------- Docker (compose): logs ----------
+          discovery.docker "host" {
+            host             = "unix:///var/run/docker.sock"
+            refresh_interval = "15s"
+          }
+
+          discovery.relabel "docker_logs" {
+            targets = discovery.docker.host.targets
+            rule {
+              source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+              target_label  = "service"
+            }
+            rule {
+              source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+              target_label  = "project"
+            }
+            rule {
+              source_labels = ["__meta_docker_container_name"]
+              regex         = "/(.*)"
+              target_label  = "container"
+            }
+          }
+
+          loki.source.docker "containers" {
+            host             = "unix:///var/run/docker.sock"
+            targets          = discovery.relabel.docker_logs.output
+            refresh_interval = "15s"
+            forward_to       = [loki.write.local.receiver]
+          }
+
+          // ---------- Docker (compose): beyou metrics ----------
+          discovery.relabel "docker_metrics" {
+            targets = discovery.docker.host.targets
+            rule {
+              source_labels = ["__meta_docker_network_name"]
+              regex         = "beyou_net"
+              action        = "keep"
+            }
+            rule {
+              source_labels = ["__meta_docker_container_label_com_docker_compose_service", "__meta_docker_port_private"]
+              separator     = ":"
+              regex         = "backend:9091|cadvisor:8080|postgres-exporter:9187|glitchtip:8000"
+              action        = "keep"
+            }
+            rule {
+              source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+              target_label  = "job"
+            }
+            rule {
+              source_labels = ["job"]
+              regex         = "backend"
+              replacement   = "beyou-backend"
+              target_label  = "job"
+            }
+            rule {
+              source_labels = ["job"]
+              regex         = "beyou-backend"
+              replacement   = "/actuator/prometheus"
+              target_label  = "__metrics_path__"
+            }
+          }
+
+          prometheus.scrape "docker" {
+            targets         = discovery.relabel.docker_metrics.output
+            scrape_interval = "15s"
+            forward_to      = [prometheus.remote_write.prometheus.receiver]
+          }
+
+          // ---------- Outputs ----------
+          prometheus.remote_write "prometheus" {
+            endpoint {
+              url = "http://kps-prometheus.monitoring.svc:9090/api/v1/write"
+            }
+          }
+
+          loki.write "local" {
+            endpoint {
+              url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+            }
+          }
