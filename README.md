@@ -118,8 +118,10 @@ Postgres and the uploads are still compose containers. Both nginx images proxy
 `/api/v1/` to `backend:8099`, so `apps/beyou/backend-bridge.yaml` gives them a
 `backend` Service that relays to the compose backend on the host (temporary).
 
-Images are pinned by digest. To deploy a new build, commit the new digest to
-`apps/beyou/{frontend,docs}.yaml`.
+Images are pinned by digest and deployed by Flux image automation
+(`apps/beyou/images.yaml`): when CI pushes a new `latest`, Flux commits its digest
+here and rolls it out, within about five minutes. Roll back with `git revert`;
+hold deploys with `flux suspend image update beyou`.
 
 ## Bootstrapping a new cluster
 
@@ -129,5 +131,7 @@ kubectl -n flux-system create secret generic sops-age \
   --from-file=age.agekey=$HOME/.config/sops/age/keys.txt
 GITHUB_TOKEN=$(gh auth token) flux bootstrap github \
   --owner=AndDev741 --repository=be-infra --branch=main \
-  --path=clusters/beyou-server --personal
+  --path=clusters/beyou-server --personal \
+  --read-write-key \
+  --components-extra=image-reflector-controller,image-automation-controller
 ```

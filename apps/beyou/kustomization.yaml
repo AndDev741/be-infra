@@ -10,3 +10,4 @@ resources:
   - frontend.yaml
   - docs.yaml
   - ingress.yaml
+  - images.yaml

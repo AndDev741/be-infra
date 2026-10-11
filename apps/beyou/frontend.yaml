@@ -1,7 +1,8 @@
 # The web app (app.beyouweb.com), built by Beyou-Frontend CI. nginx serves the
 # SPA and proxies /api/v1/ to `backend` (see backend-bridge.yaml).
 #
-# Pinned by digest: a new build goes out by committing its digest here.
+# Pinned by digest. Flux image automation (images.yaml) commits the new digest
+# here when CI pushes a new `latest`.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,7 +19,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: nginx
-          image: ghcr.io/anddev741/beyou-web@sha256:6aaf059870d8a7ecd6637b6749ca258a63b4ab022a180dc6e0265b69796d777d
+          image: ghcr.io/anddev741/beyou-web:latest@sha256:6aaf059870d8a7ecd6637b6749ca258a63b4ab022a180dc6e0265b69796d777d # {"$imagepolicy": "beyou:beyou-web"}
           ports:
             - containerPort: 80
           resources:
