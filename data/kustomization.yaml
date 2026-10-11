@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - network-policy.yaml
+  - secrets/beyou-db-owner.sops.yaml
+  - secrets/beyou-db-readonly.sops.yaml
+  - postgres.yaml

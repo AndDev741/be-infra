@@ -1,0 +1,76 @@
+# Postgres is reachable only from the namespaces of the apps that have a
+# database here, and from Grafana (read-only dashboards). Each app can log in
+# only as its own role, into its own database.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: data
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Instances talk to each other (replication, once there are two) and the
+# operator's jobs run here.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: within-namespace
+  namespace: data
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# The operator polls each instance's status endpoint.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: status-from-operator
+  namespace: data
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: pg }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: cnpg-system }
+      ports:
+        - port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-from-apps
+  namespace: data
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: pg }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: beyou }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports:
+        - port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metrics-from-monitoring
+  namespace: data
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: pg }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports:
+        - port: 9187

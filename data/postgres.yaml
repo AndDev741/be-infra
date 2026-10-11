@@ -1,0 +1,61 @@
+# The shared Postgres: one CloudNativePG cluster, one database and one role per
+# app. Apps connect to the `pg-rw` Service (always the primary).
+#
+# Adding an app: a managed role below, a basic-auth Secret for its password in
+# secrets/, a Database, and its namespace in network-policy.yaml.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+  namespace: data
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.11-202609210816-standard-trixie
+  # With one instance there is nothing to fail over to; this lets the node
+  # drain (and k3s upgrade) without waiting forever on the primary.
+  enablePDB: false
+  storage:
+    storageClass: local-path
+    size: 5Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 768Mi }
+  postgresql:
+    parameters:
+      shared_buffers: 128MB
+      max_connections: "100"
+  managed:
+    roles:
+      # beyou: owner of the beyou database, used by its backend and backups.
+      - name: beyou
+        ensure: present
+        login: true
+        passwordSecret: { name: beyou-db-owner }
+      # beyou_readonly: Grafana's product dashboard. Granted SELECT on the beyou
+      # database's tables by the owner (README.md, "beyou").
+      - name: beyou_readonly
+        ensure: present
+        login: true
+        connectionLimit: 5
+        passwordSecret: { name: beyou-db-readonly }
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: beyou
+  namespace: data
+spec:
+  cluster: { name: pg }
+  name: beyou
+  owner: beyou
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: pg
+  namespace: data
+spec:
+  selector:
+    matchLabels: { cnpg.io/cluster: pg }
+  podMetricsEndpoints:
+    - port: metrics

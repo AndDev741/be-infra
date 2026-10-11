@@ -1,0 +1,42 @@
+# CloudNativePG: the operator that runs Postgres in this cluster. The databases
+# themselves are declared in data/ as `Cluster`, `Database` and managed roles;
+# the operator creates the instances, the users and the passwords from them,
+# and later the replicas and failover (`instances: 2`).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: cnpg
+  namespace: cnpg-system
+spec:
+  interval: 24h
+  url: https://cloudnative-pg.github.io/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cnpg
+  namespace: cnpg-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: cloudnative-pg
+      version: 0.29.1
+      sourceRef:
+        kind: HelmRepository
+        name: cnpg
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    fullnameOverride: cnpg
+    resources:
+      requests: { cpu: 20m, memory: 64Mi }
+      limits: { memory: 256Mi }
+    monitoring:
+      # The upstream dashboard, picked up by Grafana's sidecar.
+      grafanaDashboard:
+        create: true
+        annotations:
+          grafana_folder: Platform

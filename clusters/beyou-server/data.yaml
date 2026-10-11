@@ -1,0 +1,24 @@
+# The shared Postgres (data/). After the platform, which installs the
+# CloudNativePG operator and its CRDs, and after monitoring, for the PodMonitor.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: data
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: platform
+    - name: monitoring
+  interval: 10m
+  retryInterval: 1m
+  path: ./data
+  prune: true
+  wait: true
+  timeout: 10m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
