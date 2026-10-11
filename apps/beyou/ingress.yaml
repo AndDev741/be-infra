@@ -1,5 +1,6 @@
-# Traefik (platform/traefik) routes each hostname to its nginx. api.beyouweb.com
-# stays on the compose backend until phase 3.
+# Traefik (platform/traefik) routes each hostname to its Service. The web app
+# calls api.beyouweb.com directly (VITE_API_URL); the nginx pods also proxy
+# /api/v1/ to the same `backend` Service.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -26,3 +27,12 @@ spec:
               service:
                 name: beyou-docs
                 port: { number: 80 }
+    - host: api.beyouweb.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port: { number: 8099 }
