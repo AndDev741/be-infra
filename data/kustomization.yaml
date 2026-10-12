@@ -6,4 +6,5 @@ resources:
   - network-policy.yaml
   - secrets/beyou-db-owner.sops.yaml
   - secrets/beyou-db-readonly.sops.yaml
+  - secrets/glitchtip-db-owner.sops.yaml
   - postgres.yaml

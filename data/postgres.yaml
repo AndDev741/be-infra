@@ -38,6 +38,11 @@ spec:
         login: true
         connectionLimit: 5
         passwordSecret: { name: beyou-db-readonly }
+      # glitchtip: owner of the glitchtip database (apps/glitchtip).
+      - name: glitchtip
+        ensure: present
+        login: true
+        passwordSecret: { name: glitchtip-db-owner }
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -48,6 +53,16 @@ spec:
   cluster: { name: pg }
   name: beyou
   owner: beyou
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: glitchtip
+  namespace: data
+spec:
+  cluster: { name: pg }
+  name: glitchtip
+  owner: glitchtip
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
