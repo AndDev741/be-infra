@@ -1,0 +1,73 @@
+# TEMPORARY, until GlitchTip moves into the cluster (phase 4).
+#
+# The backend sends error reports (SENTRY_DSN) and its scheduler heartbeats to
+# URLs naming `glitchtip:8000`, the compose service. GlitchTip is published on
+# the host's 127.0.0.1:8000 only. A pod cannot reach the host's loopback, and
+# Docker drops forwarded traffic to container IPs, so socat on the host network
+# relays from the cni0 address (10.42.0.1, the node as seen from pods) to
+# 127.0.0.1:8000, behind a `glitchtip` Service. It binds that address only, so
+# nothing on the LAN or tailnet can use it. NetworkPolicy does not apply to
+# host-network pods: every pod in the cluster can reach this port.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glitchtip-bridge
+  namespace: beyou
+spec:
+  replicas: 1
+  # A second copy cannot bind the same address on the same node.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: glitchtip-bridge }
+  template:
+    metadata:
+      labels: { app: glitchtip-bridge }
+    spec:
+      hostNetwork: true
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 65534
+        runAsNonRoot: true
+      containers:
+        - name: glitchtip
+          image: docker.io/alpine/socat:1.8.0.3
+          args:
+            - TCP-LISTEN:8000,bind=10.42.0.1,fork,reuseaddr
+            - TCP:127.0.0.1:8000
+          resources:
+            requests: { cpu: 10m, memory: 8Mi }
+            limits: { memory: 32Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            tcpSocket: { host: 10.42.0.1, port: 8000 }
+            periodSeconds: 10
+---
+# No selector: the endpoint is the relay's listen address, set by hand.
+apiVersion: v1
+kind: Service
+metadata:
+  name: glitchtip
+  namespace: beyou
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: glitchtip-bridge
+  namespace: beyou
+  labels:
+    kubernetes.io/service-name: glitchtip
+    endpointslice.kubernetes.io/managed-by: flux
+addressType: IPv4
+ports:
+  - name: http
+    port: 8000
+endpoints:
+  - addresses: ["10.42.0.1"]
