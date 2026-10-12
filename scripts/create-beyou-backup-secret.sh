@@ -24,6 +24,9 @@ for line in open(os.environ["ENV_FILE"]):
     env[k] = v
 data = {k: env[k] for k in ("RESTIC_REPOSITORY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
                              "BACKUP_HEARTBEAT_URL", "BACKUP_RESTORE_HEARTBEAT_URL")}
+# The host timer pinged GlitchTip on localhost; in the cluster it is the glitchtip Service.
+for k in ("BACKUP_HEARTBEAT_URL", "BACKUP_RESTORE_HEARTBEAT_URL"):
+    data[k] = data[k].replace("http://127.0.0.1:8000", "http://glitchtip:8000", 1).replace("http://localhost:8000", "http://glitchtip:8000", 1)
 data["BACKUP_MAX_REPO_GB"] = env.get("BACKUP_MAX_REPO_GB", "5")
 data["RESTIC_PASSWORD"] = os.environ["RESTIC_PASSWORD"]
 data.update(PGHOST="pg-rw.data.svc", PGDATABASE="beyou", PGUSER="beyou", PGPASSWORD=os.environ["PGPASSWORD"])
