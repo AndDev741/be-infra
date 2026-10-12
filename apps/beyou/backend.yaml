@@ -55,8 +55,13 @@ spec:
             # metaspace is capped so it cannot grow into the limit unnoticed.
             # Non-heap (metaspace, code cache, threads) takes ~260Mi on top: at
             # 70% of 1Gi the process sat at ~980Mi RSS, a step from an OOM kill.
+            # G1 is named explicitly because under 1792M the JVM picks SerialGC,
+            # whose old generation is only emptied by a full GC: objects promoted
+            # by each notebook AI call piled up to ~430Mi over a ~100Mi live set.
+            # G1 marks the old generation concurrently, and the periodic cycle
+            # (every 5 minutes without a GC) hands memory back while idle.
             - name: JAVA_TOOL_OPTIONS
-              value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=256m
+              value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -XX:G1PeriodicGCInterval=300000
           ports:
             - { name: http, containerPort: 8099 }
             - { name: metrics, containerPort: 9091 }
