@@ -1,0 +1,25 @@
+# OmniRoute (Node, heap capped by OMNIROUTE_MEMORY_MB) and its Redis.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: omniroute
+  namespace: omniroute
+spec:
+  hard:
+    requests.cpu: 500m
+    requests.memory: 768Mi
+    limits.memory: 1536Mi
+    pods: "4"
+    persistentvolumeclaims: "1"
+    services.nodeports: "0"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+  namespace: omniroute
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 20m, memory: 32Mi }
+      default: { memory: 128Mi }

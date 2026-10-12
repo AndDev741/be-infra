@@ -1,0 +1,115 @@
+# OmniRoute: OpenAI-compatible gateway over free LLM tiers, used by the beyou
+# backend (GENERIC_BASE_URL) through omniroute.beyouweb.com. Moved from
+# ~/omniroute's compose project; its SQLite store is the omniroute-data volume.
+#
+# On :next, pinned by digest, because 3.8.51 predates the fix for upstream
+# #14092 (provider model lists hang on a stale Content-Length). Move to a
+# release tag once one ships with it.
+#
+# The `omniroute` Secret is ~/omniroute/.env (scripts/create-omniroute-secret.sh).
+# Losing STORAGE_ENCRYPTION_KEY or API_KEY_SECRET makes the stored provider
+# keys unreadable.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: omniroute-data
+  namespace: omniroute
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omniroute
+  namespace: omniroute
+spec:
+  replicas: 1
+  # One SQLite file, one writer.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: omniroute }
+  template:
+    metadata:
+      labels: { app: omniroute }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 40
+      containers:
+        - name: omniroute
+          image: diegosouzapw/omniroute:next@sha256:79a8f293a798b6e3cfcb9418f38198e57e7bd0205d9b9b8f7f1d432fd32f6e74
+          envFrom:
+            - secretRef: { name: omniroute }
+          env:
+            - { name: DATA_DIR, value: /app/data }
+            - { name: REDIS_URL, value: "redis://redis:6379" }
+            # Heap cap; the container limit below leaves room for the rest.
+            - { name: OMNIROUTE_MEMORY_MB, value: "768" }
+          ports:
+            - name: http
+              containerPort: 20128
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          # /healthz is in-memory only; the deep check stalls under load (upstream #10311).
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 384Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: omniroute-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: omniroute
+  namespace: omniroute
+spec:
+  selector: { app: omniroute }
+  ports:
+    - name: http
+      port: 20128
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omniroute
+  namespace: omniroute
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: omniroute.beyouweb.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: omniroute
+                port: { name: http }

@@ -1,0 +1,13 @@
+# The backend's error DSN and heartbeat URLs name `glitchtip:8000` (as in the
+# compose stack); this alias sends them to GlitchTip in its own namespace.
+apiVersion: v1
+kind: Service
+metadata:
+  name: glitchtip
+  namespace: beyou
+spec:
+  type: ExternalName
+  externalName: glitchtip.glitchtip.svc.cluster.local
+  ports:
+    - name: http
+      port: 8000

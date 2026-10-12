@@ -1,9 +1,7 @@
 # The two nginx pods are reachable only from Traefik, which is where the tunnel
 # connects; the backend only from them, Traefik (api.beyouweb.com) and
-# Prometheus. Everything else in the cluster is refused.
-#
-# The bridges to compose run on the host network, where NetworkPolicy does not
-# apply; see glitchtip-bridge.yaml for what that exposes.
+# Prometheus. GlitchTip's uptime monitors may probe the web app and the
+# backend's health port. Everything else in the cluster is refused.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -27,6 +25,8 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: ingress }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: glitchtip }
       ports:
         - port: 80
 ---
@@ -62,5 +62,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: monitoring }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: glitchtip }
       ports:
         - port: 9091

@@ -1,0 +1,11 @@
+# GlitchTip, moved from Beyou-dev-env's compose stack. Its database is
+# `glitchtip` in the shared Postgres (data/).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - network-policy.yaml
+  - secrets/glitchtip.sops.yaml
+  - valkey.yaml
+  - glitchtip.yaml

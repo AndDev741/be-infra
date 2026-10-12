@@ -1,0 +1,47 @@
+# GlitchTip's queue and cache. Nothing in it needs to survive a restart, as in
+# the compose stack it came from, so there is no volume.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glitchtip-valkey
+  namespace: glitchtip
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: glitchtip-valkey }
+  template:
+    metadata:
+      labels: { app: glitchtip-valkey }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+      containers:
+        - name: valkey
+          image: valkey/valkey:9.1-alpine@sha256:de31910896150d5e754a07d57d227cfdde4e258ddd0d1aa4607f2d2f95843715
+          args: [valkey-server, --save, "", --appendonly, "no", --maxmemory, 64mb, --maxmemory-policy, allkeys-lru]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            tcpSocket: { port: valkey }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 96Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glitchtip-valkey
+  namespace: glitchtip
+spec:
+  selector: { app: glitchtip-valkey }
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey

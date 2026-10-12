@@ -1,5 +1,5 @@
-# The main app: web app, docs site, backend (database in data/). Error tracking
-# is still GlitchTip in Beyou-dev-env's compose stack (glitchtip-bridge.yaml).
+# The main app: web app, docs site, backend (database in data/). Errors and
+# heartbeats go to GlitchTip (apps/glitchtip) through the alias in glitchtip.yaml.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -8,7 +8,7 @@ resources:
   - network-policy.yaml
   - secrets/beyou-backend.sops.yaml
   - secrets/beyou-backup.sops.yaml
-  - glitchtip-bridge.yaml
+  - glitchtip.yaml
   - backend.yaml
   - frontend.yaml
   - docs.yaml

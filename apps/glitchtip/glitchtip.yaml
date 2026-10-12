@@ -1,0 +1,135 @@
+# GlitchTip: error tracking, uptime monitors and heartbeats for every app.
+# One process runs web, worker and migrations (SERVER_ROLE=all_in_one).
+# The browser SDKs reach it at mnt.beyouweb.com, the backends at
+# glitchtip.glitchtip.svc:8000 (beyou keeps a `glitchtip` alias Service).
+#
+# The `glitchtip` Secret holds DATABASE_URL, SECRET_KEY, EMAIL_URL and
+# DEFAULT_FROM_EMAIL (scripts/create-glitchtip-secrets.sh).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: glitchtip-uploads
+  namespace: glitchtip
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glitchtip
+  namespace: glitchtip
+spec:
+  replicas: 1
+  # Two all_in_one pods would both run the scheduled tasks.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: glitchtip }
+  template:
+    metadata:
+      labels: { app: glitchtip }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 5000
+        runAsGroup: 5000
+        fsGroup: 5000
+      containers:
+        - name: glitchtip
+          image: glitchtip/glitchtip:6.2.2@sha256:ef28cc4b92c8c9e427b8ddd55682d6aa155129ddf1c5db5f6bbbd09155fd3b6e
+          envFrom:
+            - secretRef: { name: glitchtip }
+          env:
+            - { name: SERVER_ROLE, value: all_in_one }
+            - { name: VALKEY_URL, value: "redis://glitchtip-valkey:6379" }
+            - { name: GLITCHTIP_DOMAIN, value: "https://mnt.beyouweb.com" }
+            # The first account can always self-register; every later signup is
+            # blocked while this is False.
+            - { name: ENABLE_USER_REGISTRATION, value: "False" }
+            - { name: ENABLE_ORGANIZATION_CREATION, value: "False" }
+            - { name: GLITCHTIP_RETENTION_DAYS, value: "30" }
+            # The uptime monitors probe Services inside the cluster.
+            - { name: GLITCHTIP_UPTIME_ALLOW_PRIVATE_IPS, value: "True" }
+            - { name: GLITCHTIP_ENABLE_UPTIME, value: "True" }
+            # GET /metrics (counts and request histograms only), for Prometheus.
+            - { name: ENABLE_OBSERVABILITY_API, value: "True" }
+          ports:
+            - name: http
+              containerPort: 8000
+          volumeMounts:
+            - name: uploads
+              mountPath: /code/uploads
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          # Migrations run before it serves; the first start takes a minute or two.
+          startupProbe:
+            httpGet: { path: /_health/, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /_health/, port: http }
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet: { path: /_health/, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 640Mi }
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: glitchtip-uploads
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glitchtip
+  namespace: glitchtip
+  labels: { app: glitchtip }
+spec:
+  selector: { app: glitchtip }
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: glitchtip
+  namespace: glitchtip
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: mnt.beyouweb.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: glitchtip
+                port: { name: http }
+---
+# job="glitchtip", as when Alloy scraped the compose container.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: glitchtip
+  namespace: glitchtip
+spec:
+  jobLabel: app
+  selector:
+    matchLabels: { app: glitchtip }
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

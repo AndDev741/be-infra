@@ -68,3 +68,50 @@ spec:
     provider: sops
     secretRef:
       name: sops-age
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: glitchtip
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: platform
+    # Its database, and the ServiceMonitor CRD.
+    - name: data
+    - name: monitoring
+  interval: 10m
+  retryInterval: 1m
+  path: ./apps/glitchtip
+  prune: true
+  wait: true
+  timeout: 10m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: omniroute
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: platform
+  interval: 10m
+  retryInterval: 1m
+  path: ./apps/omniroute
+  prune: true
+  wait: true
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

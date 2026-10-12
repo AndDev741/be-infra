@@ -1,0 +1,10 @@
+# OmniRoute, moved from its own compose project in ~/omniroute.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - network-policy.yaml
+  - secrets/omniroute.sops.yaml
+  - redis.yaml
+  - omniroute.yaml
