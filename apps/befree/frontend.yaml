@@ -19,16 +19,16 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: ghcr.io/anddev741/befree-frontend:latest@sha256:7fd0ca4af0d92eea736e159b4806bfdc164c3574689865be3c997a8f909e71d1 # {"$imagepolicy": "befree:befree-frontend"}
+          image: ghcr.io/anddev741/befree-frontend:latest@sha256:09a12eef6039d1f395661e32e2e79707ec65a2614bb48acb01f4000ad68b0b64 # {"$imagepolicy": "befree:befree-frontend"}
           ports:
             - containerPort: 8080
           resources:
-            requests: { memory: 16Mi, cpu: 20m }
-            limits: { memory: 64Mi }
+            requests: {memory: 16Mi, cpu: 20m}
+            limits: {memory: 64Mi}
           readinessProbe:
-            httpGet: { path: /healthz, port: 8080 }
+            httpGet: {path: /healthz, port: 8080}
           livenessProbe:
-            httpGet: { path: /healthz, port: 8080 }
+            httpGet: {path: /healthz, port: 8080}
 ---
 apiVersion: v1
 kind: Service
