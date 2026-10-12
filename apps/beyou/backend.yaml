@@ -51,17 +51,18 @@ spec:
             - { name: UPLOAD_DIR, value: /data/uploads }
             - { name: MANAGEMENT_PORT, value: "9091" }
             - { name: MANAGEMENT_ADDRESS, value: 0.0.0.0 }
-            # The heap follows the container limit (70% of it), and metaspace is
-            # capped so it cannot grow into the limit unnoticed. Same reasoning
-            # as in Beyou-dev-env's docker-compose.prod.yml.
+            # The heap follows the container limit (55% of it, ~700Mi), and
+            # metaspace is capped so it cannot grow into the limit unnoticed.
+            # Non-heap (metaspace, code cache, threads) takes ~260Mi on top: at
+            # 70% of 1Gi the process sat at ~980Mi RSS, a step from an OOM kill.
             - name: JAVA_TOOL_OPTIONS
-              value: -XX:MaxRAMPercentage=70 -XX:MaxMetaspaceSize=256m
+              value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=256m
           ports:
             - { name: http, containerPort: 8099 }
             - { name: metrics, containerPort: 9091 }
           resources:
-            requests: { cpu: 200m, memory: 768Mi }
-            limits: { memory: 1Gi }
+            requests: { cpu: 200m, memory: 896Mi }
+            limits: { memory: 1280Mi }
           volumeMounts:
             - name: uploads
               mountPath: /data/uploads

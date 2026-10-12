@@ -1,5 +1,5 @@
 # What this app may take from the node, so one app can never starve the others.
-# Today: requests ~850Mi and limits ~1.3Gi (the backend is 768Mi/1Gi of it), plus
+# Today: requests ~1Gi and limits ~1.5Gi (the backend is 896Mi/1280Mi of it), plus
 # the backup jobs. The database is in the data namespace, with its own quota.
 # There is no CPU limit on purpose: a quota on CPU requests is enough to keep
 # scheduling honest, and CPU limits only throttle a node that has idle cores.
