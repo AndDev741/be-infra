@@ -1,5 +1,6 @@
 # What this app may take from the node, so one app can never starve the others.
-# Today: requests 208Mi, limits 524Mi (backend, nginx, postgres). Room for one rolling-update surge.
+# Today: requests ~80Mi, limits ~224Mi (backend, nginx); the database is in data/.
+# Room for one rolling-update surge.
 # There is no CPU limit on purpose: a quota on CPU requests is enough to keep
 # scheduling honest, and CPU limits only throttle a node that has idle cores.
 apiVersion: v1
@@ -13,7 +14,7 @@ spec:
     requests.memory: 512Mi
     limits.memory: 1Gi
     pods: "15"
-    persistentvolumeclaims: "4"
+    persistentvolumeclaims: "1"
     services.nodeports: "0"
 ---
 # Defaults for any container that does not declare its own (the quota above

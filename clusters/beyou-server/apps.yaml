@@ -8,6 +8,8 @@ metadata:
 spec:
   dependsOn:
     - name: platform
+    # Its database.
+    - name: data
   interval: 10m
   retryInterval: 1m
   path: ./apps/befree
@@ -29,8 +31,8 @@ metadata:
 spec:
   dependsOn:
     - name: platform
-    # Its database lives in the befree namespace until the shared `data` namespace exists.
-    - name: befree
+    # Its database.
+    - name: data
   interval: 10m
   retryInterval: 1m
   path: ./apps/beconscient

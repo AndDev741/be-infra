@@ -40,24 +40,3 @@ spec:
             matchLabels: { app: befree-frontend }
       ports:
         - port: 8080
----
-# This Postgres also holds the beconscient database (its backend, nightly
-# backup and weekly restore drill all connect here). That cross-namespace
-# rule goes away when the instance moves to the shared `data` namespace.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: postgres-from-apps
-  namespace: befree
-spec:
-  podSelector:
-    matchLabels: { app: postgres }
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels: { app: befree-backend }
-        - namespaceSelector:
-            matchLabels: { kubernetes.io/metadata.name: beconscient }
-      ports:
-        - port: 5432

@@ -4,8 +4,8 @@
 # (a password manager), or a lost disk loses the backup too.
 #
 # Secret beconscient-backup (created out of band, see README.md):
-#   PGHOST                                  the shared Postgres service
-#   PGUSER, PGPASSWORD                      backup role (pg_read_all_data)
+#   PGHOST                                  the shared Postgres service (pg-rw.data.svc)
+#   PGUSER, PGPASSWORD                      backup role (SELECT on the databases it dumps)
 #   RESTIC_REPOSITORY, RESTIC_PASSWORD      restic repository and its password
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY  object-store credentials
 #   DATABASES                               space-separated list, e.g. "beconscient other"

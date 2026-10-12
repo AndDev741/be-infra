@@ -19,8 +19,9 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            # The befree database in the shared Postgres (data/).
             - name: QUARKUS_DATASOURCE_JDBC_URL
-              value: jdbc:postgresql://postgres:5432/befree
+              value: jdbc:postgresql://pg-rw.data.svc:5432/befree
             - name: QUARKUS_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef: { name: befree-db, key: user }

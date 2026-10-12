@@ -12,7 +12,6 @@ resources:
   - secrets/befree-deepseek.sops.yaml
   - secrets/befree-transcription.sops.yaml
   - secrets/befree-whatsapp.sops.yaml
-  - postgres.yaml
   - backend.yaml
   - frontend.yaml
   - ingress.yaml
