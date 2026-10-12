@@ -43,6 +43,24 @@ spec:
         ensure: present
         login: true
         passwordSecret: { name: glitchtip-db-owner }
+      # befree and beconscient: owners of their databases (apps/befree, apps/beconscient).
+      - name: befree
+        ensure: present
+        login: true
+        passwordSecret: { name: befree-db-owner }
+      - name: beconscient
+        ensure: present
+        login: true
+        passwordSecret: { name: beconscient-db-owner }
+      # beconscient_backup: the nightly dump of the befree and beconscient
+      # databases (apps/beconscient/backup.yaml). Granted SELECT on those two
+      # only (README.md, "befree and beconscient"), not pg_read_all_data, which
+      # would let it read every app's database in this cluster.
+      - name: beconscient_backup
+        ensure: present
+        login: true
+        connectionLimit: 3
+        passwordSecret: { name: beconscient-db-backup }
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -63,6 +81,26 @@ spec:
   cluster: { name: pg }
   name: glitchtip
   owner: glitchtip
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: befree
+  namespace: data
+spec:
+  cluster: { name: pg }
+  name: befree
+  owner: befree
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: beconscient
+  namespace: data
+spec:
+  cluster: { name: pg }
+  name: beconscient
+  owner: beconscient
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor

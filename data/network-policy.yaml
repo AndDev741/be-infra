@@ -57,6 +57,10 @@ spec:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: glitchtip }
         - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: befree }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: beconscient }
+        - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: monitoring }
       ports:
         - port: 5432

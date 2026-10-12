@@ -7,4 +7,7 @@ resources:
   - secrets/beyou-db-owner.sops.yaml
   - secrets/beyou-db-readonly.sops.yaml
   - secrets/glitchtip-db-owner.sops.yaml
+  - secrets/befree-db-owner.sops.yaml
+  - secrets/beconscient-db-owner.sops.yaml
+  - secrets/beconscient-db-backup.sops.yaml
   - postgres.yaml
