@@ -59,6 +59,10 @@ spec:
               command: ["/bin/sh", "-ec"]
               args:
                 - |
+                  # k3s's NetworkPolicy controller lets a new pod's IP through only
+                  # once the pod is past init, so an init container can be refused
+                  # for its first seconds.
+                  for i in $(seq 60); do pg_isready -q -t 2 && break; sleep 2; done
                   pg_dump -Fc -f /staging/beyou.dump
                   [ -s /staging/beyou.dump ] || { echo "database dump is empty"; exit 1; }
                   echo "dumped beyou: $(wc -c < /staging/beyou.dump) bytes"
