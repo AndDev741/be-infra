@@ -1,0 +1,186 @@
+# Nightly encrypted backup of the beyou database and uploads, and a weekly
+# restore drill. Replaces Beyou-dev-env's scripts/backup.sh and restore-check.sh
+# (same restic repository on R2, same retention, same GlitchTip heartbeats).
+# The .env those scripts also saved is not needed any more: the configuration is
+# in this repo, encrypted, and the age key is in the password manager.
+#
+# restic encrypts in the pod before anything reaches the object store. The
+# restic password must also be kept outside the cluster (the password manager),
+# or a lost disk loses the backup too.
+#
+# Secret beyou-backup (secrets/beyou-backup.sops.yaml):
+#   PGHOST, PGDATABASE, PGUSER, PGPASSWORD   the beyou database, as its owner
+#   RESTIC_REPOSITORY, RESTIC_PASSWORD       the restic repository and its password
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY R2 credentials
+#   BACKUP_HEARTBEAT_URL                     pinged after a successful backup
+#   BACKUP_RESTORE_HEARTBEAT_URL             pinged after a passing drill
+#   BACKUP_MAX_REPO_GB                       cost guard (R2 free tier is 10 GB)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+  namespace: beyou
+spec:
+  schedule: "20 3 * * *"
+  timeZone: Europe/Lisbon
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels: { app: beyou-backup }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            fsGroup: 1001
+          volumes:
+            - name: staging
+              emptyDir: {}
+            - name: cache
+              emptyDir: {}
+            - name: uploads
+              persistentVolumeClaim:
+                claimName: beyou-uploads
+                readOnly: true
+          initContainers:
+            - name: dump
+              image: postgres:17-alpine
+              envFrom:
+                - secretRef:
+                    name: beyou-backup
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  pg_dump -Fc -f /staging/beyou.dump
+                  [ -s /staging/beyou.dump ] || { echo "database dump is empty"; exit 1; }
+                  echo "dumped beyou: $(wc -c < /staging/beyou.dump) bytes"
+                  tar -czf /staging/uploads.tar.gz -C /uploads .
+                  echo "archived uploads: $(wc -c < /staging/uploads.tar.gz) bytes"
+                  printf 'stamp=%s\ndb=beyou\n' "$(date -u +%Y%m%dT%H%M%SZ)" > /staging/MANIFEST
+              volumeMounts:
+                - { name: staging, mountPath: /staging }
+                - { name: uploads, mountPath: /uploads, readOnly: true }
+              resources:
+                requests: { cpu: 50m, memory: 32Mi }
+                limits: { memory: 128Mi }
+          containers:
+            - name: restic
+              image: restic/restic:0.18.1
+              envFrom:
+                - secretRef:
+                    name: beyou-backup
+              env:
+                - { name: RESTIC_CACHE_DIR, value: /cache }
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  restic cat config >/dev/null 2>&1 || restic init
+                  restic backup /staging --host beyou-k8s --tag beyou
+                  restic forget --host beyou-k8s --tag beyou \
+                    --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+                  restic snapshots --host beyou-k8s --latest 1
+                  bytes=$(restic stats --mode raw-data --json | sed -E 's/.*"total_size":([0-9]+).*/\1/')
+                  echo "repository size $((bytes / 1048576)) MiB (guard ${BACKUP_MAX_REPO_GB:-5} GiB)"
+                  if [ "$bytes" -gt $(( ${BACKUP_MAX_REPO_GB:-5} * 1073741824 )) ]; then
+                    echo "ERROR the backup SUCCEEDED, but the repository is over the cost guard"; exit 1
+                  fi
+                  wget -q -O /dev/null --post-data= "$BACKUP_HEARTBEAT_URL" && echo "heartbeat sent" \
+                    || echo "WARN heartbeat failed; the backup itself succeeded"
+              volumeMounts:
+                - { name: staging, mountPath: /staging, readOnly: true }
+                - { name: cache, mountPath: /cache }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 256Mi }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: restore-check
+  namespace: beyou
+spec:
+  schedule: "0 5 * * 0"
+  timeZone: Europe/Lisbon
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels: { app: beyou-backup }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+          volumes:
+            - name: restore
+              emptyDir: {}
+            - name: cache
+              emptyDir: {}
+          initContainers:
+            - name: fetch
+              image: restic/restic:0.18.1
+              envFrom:
+                - secretRef:
+                    name: beyou-backup
+              env:
+                - { name: RESTIC_CACHE_DIR, value: /cache }
+              command: ["/bin/sh", "-ec"]
+              args:
+                - restic restore latest --host beyou-k8s --tag beyou --target /restore
+              volumeMounts:
+                - { name: restore, mountPath: /restore }
+                - { name: cache, mountPath: /cache }
+          containers:
+            # Restores the dump into a throwaway Postgres inside this pod (never
+            # into the shared instance) and compares row counts with the live
+            # database. Live counts may have grown since the dump; a table that
+            # is missing, or empty while live has rows, fails the drill.
+            - name: drill
+              image: postgres:17-alpine
+              envFrom:
+                - secretRef:
+                    name: beyou-backup
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  dump=$(find /restore -name beyou.dump | head -n1)
+                  [ -n "$dump" ] && [ -s "$dump" ] || { echo "FAIL: no beyou.dump in the snapshot"; exit 1; }
+                  tar -tzf "$(find /restore -name uploads.tar.gz | head -n1)" >/dev/null || { echo "FAIL: uploads archive unreadable"; exit 1; }
+                  export PGDATA=/tmp/pgdata
+                  initdb -D "$PGDATA" -U drill --auth=trust >/dev/null
+                  pg_ctl -D "$PGDATA" -o "-c listen_addresses='' -k /tmp" -w start >/dev/null
+                  createdb -h /tmp -U drill restorecheck
+                  pg_restore --no-owner --no-privileges -h /tmp -U drill -d restorecheck "$dump" || echo "WARN pg_restore reported errors"
+                  failures=0
+                  for t in $(psql -Atc "select quote_ident(schemaname)||'.'||quote_ident(relname) from pg_stat_user_tables order by 1"); do
+                    restored=$(psql -h /tmp -U drill -d restorecheck -Atc "select count(*) from $t" 2>/dev/null || echo absent)
+                    if [ "$restored" = absent ]; then echo "MISSING  $t"; failures=$((failures+1)); continue; fi
+                    live=$(psql -Atc "select count(*) from $t")
+                    if [ "$live" -gt 0 ] && [ "$restored" -eq 0 ]; then echo "EMPTY    $t live=$live"; failures=$((failures+1));
+                    else echo "ok       $t live=$live restored=$restored"; fi
+                  done
+                  pg_ctl -D "$PGDATA" -m fast stop >/dev/null
+                  if [ "$failures" -gt 0 ]; then echo "FAIL: $failures problem(s); the backup is not trustworthy"; exit 1; fi
+                  echo PASS
+                  wget -q -O /dev/null --post-data= "$BACKUP_RESTORE_HEARTBEAT_URL" && echo "heartbeat sent" || echo "WARN heartbeat failed"
+              volumeMounts:
+                - { name: restore, mountPath: /restore, readOnly: true }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 384Mi }
