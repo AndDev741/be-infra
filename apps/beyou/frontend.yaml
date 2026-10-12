@@ -19,7 +19,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: nginx
-          image: ghcr.io/anddev741/beyou-web:latest@sha256:be2ce2773b9f8642600c36f9dea25184f7c3412fe310a847f896cada132ef286 # {"$imagepolicy": "beyou:beyou-web"}
+          image: ghcr.io/anddev741/beyou-web:latest@sha256:0d1d69a2607952b13849c453148d885d316d87fa83330de0e08fbba39a4fee27 # {"$imagepolicy": "beyou:beyou-web"}
           ports:
             - containerPort: 80
           resources:
