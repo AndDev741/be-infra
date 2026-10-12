@@ -107,11 +107,10 @@ overwrite the production password.
 
 ### beconscient
 
-Manifests moved from `beConscient/deploy`. Images come from the registry on the
-node's loopback (`localhost:5000`) and are pinned by digest: after
-`deploy/scripts/publish-images.sh`, commit the new digests to
-`apps/beconscient/{backend,frontend}.yaml`. Database setup, backup and restore
-procedures are in `beConscient/deploy/README.md`.
+Manifests moved from `beConscient/deploy`. beConscient's CI pushes the images to
+GHCR and Flux image automation (`apps/beconscient/images.yaml`) commits each new
+digest, as for beyou. Database setup, backup and restore procedures are in
+`beConscient/deploy/README.md`.
 
 ### beyou
 

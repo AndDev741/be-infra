@@ -13,3 +13,4 @@ resources:
   - frontend.yaml
   - backup.yaml
   - ingress.yaml
+  - images.yaml

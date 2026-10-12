@@ -1,6 +1,6 @@
 # The backend. Secrets are created out of band (README.md): beconscient-db,
-# beconscient-auth and beconscient-hpke. The image comes from the registry the
-# cluster pulls from; deploying a new build means committing its digest here.
+# beconscient-auth and beconscient-hpke. The image is built by beConscient's CI
+# and deployed by Flux image automation (images.yaml).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,7 +21,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: backend
-          image: localhost:5000/beconscient-backend@sha256:708437c64d50711be9c383934c7f1dcb54e4edcd1f4f55dde730027cd4839025
+          image: ghcr.io/anddev741/beconscient-backend:latest@sha256:2626da8045aedb1e35b876784d0ffa1dfc2b116d92c5c933bc5ffa1bda0d9ca2 # {"$imagepolicy": "beconscient:beconscient-backend"}
           ports:
             - containerPort: 8080
           envFrom:
