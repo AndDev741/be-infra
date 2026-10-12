@@ -1,0 +1,79 @@
+# Continuous deployment: beFree's CI pushes `latest` to GHCR, Flux commits
+# the new digest to backend.yaml / frontend.yaml (the `$imagepolicy` markers)
+# and the befree Kustomization rolls it out. Same setup as apps/beyou.
+#   flux suspend image update befree    # hold deploys back
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: befree-backend
+  namespace: befree
+spec:
+  image: ghcr.io/anddev741/befree-backend
+  interval: 5m
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: befree-backend
+  namespace: befree
+spec:
+  imageRepositoryRef: { name: befree-backend }
+  filterTags: { pattern: '^latest$' }
+  policy:
+    alphabetical: { order: asc }
+  digestReflectionPolicy: Always
+  interval: 5m
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: befree-frontend
+  namespace: befree
+spec:
+  image: ghcr.io/anddev741/befree-frontend
+  interval: 5m
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: befree-frontend
+  namespace: befree
+spec:
+  imageRepositoryRef: { name: befree-frontend }
+  filterTags: { pattern: '^latest$' }
+  policy:
+    alphabetical: { order: asc }
+  digestReflectionPolicy: Always
+  interval: 5m
+---
+# Writes the policies above into this app's directory only, and pushes to main.
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageUpdateAutomation
+metadata:
+  name: befree
+  namespace: befree
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+  git:
+    checkout:
+      ref: { branch: main }
+    commit:
+      author:
+        name: fluxcdbot
+        email: fluxcdbot@users.noreply.github.com
+      messageTemplate: |-
+        Deploy new befree images
+
+        {{ range .Changed.Changes -}}
+        - {{ .OldValue }} -> {{ .NewValue }}
+        {{ end -}}
+    push:
+      branch: main
+  update:
+    path: ./apps/befree
+    strategy: Setters
+

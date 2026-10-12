@@ -1,6 +1,5 @@
-# Logs from every pod (and, until beyou leaves compose, every Docker container),
-# shipped by Alloy. Single binary on the local disk, same settings the compose
-# stack used: 30 days of retention, enforced by the compactor.
+# Logs from every pod, shipped by Alloy. Single binary on the local disk, same
+# settings the compose stack used: 30 days of retention, enforced by the compactor.
 apiVersion: v1
 kind: ConfigMap
 metadata:

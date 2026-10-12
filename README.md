@@ -3,16 +3,21 @@
 Everything that runs on `beyou-server`, a single-node k3s cluster, described in
 git and applied by [Flux](https://fluxcd.io). Each app lives in its own
 namespace with its own resource quota and a default-deny network policy; the
-pieces they share (ingress, and soon monitoring) live under `platform/`.
+pieces they share (ingress, the database, monitoring) live under `platform/`
+and `data/`. Nothing runs in Docker on the node any more.
 
 ```
 Cloudflare Tunnel ──> NodePort 30000 ──> Traefik (ns: ingress) ── Host header ──┐
                                                                                  │
-        ┌──────────────────────────┬───────────────────────────┬────────────────┘
-   ns: befree                 ns: beconscient              ns: beyou
-   nginx → backend            nginx → backend              app + docs nginx → backend
-   postgres (shared, see below)   nightly backup, weekly restore drill        │
-                                                           ns: data ── Postgres (CloudNativePG)
+   ┌─────────────────┬──────────────────┬─────────────────┬──────────────┬──────┘
+ ns: befree      ns: beconscient     ns: beyou          ns: glitchtip  ns: omniroute
+ nginx → backend nginx → backend     app + docs nginx   GlitchTip      OmniRoute
+                 backup + drill      → backend          + Valkey       + Redis
+                 (befree too)        backup + drill
+       │               │                  │                 │
+       └───────────────┴──── ns: data ── Postgres (CloudNativePG, one DB + role per app)
+
+ ns: monitoring: Prometheus, Grafana (obs.beyouweb.com), Loki, Alloy
 ```
 
 ## Layout
@@ -27,19 +32,24 @@ Cloudflare Tunnel ──> NodePort 30000 ──> Traefik (ns: ingress) ── Ho
 | `data/` | The shared Postgres: one cluster, a database and a role per app (Flux Kustomization `data`) |
 | `platform/traefik/` | The only ingress controller and the only way in (Helm chart, pinned version) |
 | `apps/<app>/` | Namespace, quota, network policies, encrypted secrets, workloads, Ingress |
+| `scripts/` | One-off helpers: git hooks, and the scripts that built the encrypted Secrets during the move from compose |
 
 ## How a change reaches the cluster
 
 Commit and push to `main`. Flux polls every few minutes; to apply now:
 
 ```sh
-flux reconcile kustomization <platform|data|befree|beconscient|beyou> --with-source
+flux reconcile kustomization <platform|data|befree|beconscient|beyou|glitchtip|omniroute> --with-source
 flux get kustomizations          # health of each app
 ```
 
 Changes made with `kubectl` to anything Flux manages are reverted on the next
 reconcile. That includes `kubectl set image`: a new image is deployed by
-committing its tag or digest here.
+committing its tag or digest here, which Flux image automation does by itself
+for befree, beconscient and beyou (each app's `images.yaml`): when CI pushes a
+new `latest` to GHCR, Flux commits the digest and rolls it out within about
+five minutes. Roll back with `git revert`; hold deploys with
+`flux suspend image update <app>`.
 
 ## Monitoring
 
@@ -49,17 +59,63 @@ Grafana at https://obs.beyouweb.com (admin login in
 - **Metrics**: kube-prometheus-stack. node-exporter covers the host, the
   kubelet covers every pod and container, kube-state-metrics covers the
   cluster's own state. 15 days, 10 Gi.
-- **Logs**: Loki, 30 days, 10 Gi. Alloy ships the logs of every pod and of every
-  Docker container on the node.
-- **The compose side**: until beyou moves into the cluster, Alloy (on the host
-  network) also scrapes the beyou backend, cAdvisor, postgres-exporter and
-  GlitchTip and remote-writes them to Prometheus, keeping the old job names so
-  the beyou dashboards work unchanged.
+- **Logs**: Loki, 30 days, 10 Gi. Alloy ships the logs of every pod, labelled
+  with `namespace`, `pod`, `container` and `app`.
+- **Alerts**: Grafana-managed rules in `kube-prometheus-stack.yaml`, sent by
+  email. GlitchTip (https://mnt.beyouweb.com) adds error tracking, uptime
+  monitors on each component's health endpoint, and heartbeats for the
+  scheduled jobs and backups.
 - **Dashboards** are ConfigMaps labelled `grafana_dashboard: "1"`, in any
   namespace; the `grafana_folder` annotation picks the folder.
 - **An app declares its own scraping** with a ServiceMonitor or PodMonitor in
   its namespace, plus a NetworkPolicy letting the `monitoring` namespace in.
   befree and beconscient expose no metrics endpoint yet.
+
+## Database
+
+One CloudNativePG cluster, `pg` in the `data` namespace (`data/postgres.yaml`).
+Each app gets a role and a database declared there, a basic-auth Secret for the
+role's password in `data/secrets/`, and its namespace in
+`data/network-policy.yaml`. Apps connect to `pg-rw.data.svc:5432`.
+
+| Database | Owner | Other roles |
+|---|---|---|
+| `beyou` | `beyou` | `beyou_readonly` (Grafana's product dashboard) |
+| `glitchtip` | `glitchtip` | |
+| `befree` | `befree` | `beconscient_backup` (SELECT, for the nightly dump) |
+| `beconscient` | `beconscient` | `beconscient_backup` (SELECT, for the nightly dump) |
+
+Grants that are not ownership are given once by the owner, and also cover
+tables created later:
+
+```sql
+-- in beyou, as beyou
+GRANT USAGE ON SCHEMA public TO beyou_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO beyou_readonly;
+ALTER DEFAULT PRIVILEGES FOR ROLE beyou IN SCHEMA public GRANT SELECT ON TABLES TO beyou_readonly;
+
+-- in befree as befree, and in beconscient as beconscient
+GRANT USAGE ON SCHEMA public TO beconscient_backup;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO beconscient_backup;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO beconscient_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT SELECT ON TABLES TO beconscient_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT SELECT ON SEQUENCES TO beconscient_backup;
+```
+
+No backup role gets `pg_read_all_data`: in a shared cluster that would reach
+every app's database.
+
+Backups are logical, per app, and each comes with a weekly restore drill into a
+throwaway Postgres that compares row counts with the live database:
+
+| Job | What | Where |
+|---|---|---|
+| `beyou/backup` (03:20) | `beyou` database + uploads | restic on Cloudflare R2, heartbeat to GlitchTip |
+| `beconscient/backup` (03:40) | `beconscient` and `befree` databases | restic on Cloudflare R2 |
+
+Run one by hand with `kubectl -n <ns> create job --from=cronjob/backup backup-manual`.
+There is no continuous (WAL) archiving yet; the CloudNativePG barman plugin
+needs cert-manager.
 
 ## Isolation per app
 
@@ -67,12 +123,12 @@ Grafana at https://obs.beyouweb.com (admin login in
   app, so one app can never starve the node. No CPU limits, by design.
 - **NetworkPolicy** (`apps/<app>/network-policy.yaml`): deny all ingress, then
   allow only Traefik → nginx → backend → database. No app has a NodePort.
+  Egress is open.
 - **One Kustomization per app** in Flux, so a broken app does not block the others.
 
-The beconscient database currently lives in the Postgres in the `befree`
-namespace, which is why `befree` allows port 5432 from the `beconscient`
-namespace. Both will move to one shared Postgres in a `data` namespace, with a
-database and role per app.
+k3s's NetworkPolicy controller admits a new pod's IP a moment after the pod
+starts, so a pod that connects to another namespace straight away (an init
+container, say) can be refused once. The backup jobs wait for Postgres first.
 
 ## Secrets
 
@@ -99,17 +155,20 @@ Guards against committing a secret in clear text:
 
 ### befree
 
-Manifests moved from `beFree/deploy`. Images are `:latest` on GHCR, so a new
-build goes out with `kubectl -n befree rollout restart deploy/<name>` until
-image automation lands. The dev-only `befree-db` Secret from
-`beFree/deploy/00-namespace.yaml` is not here on purpose: applying it would
-overwrite the production password.
+Manifests moved from `beFree/deploy`. Images come from GHCR through image
+automation. Its database is `befree` in the shared Postgres; the `befree-db`
+Secret holds the role's credentials for the backend (and the same password is
+in `data/secrets/befree-db-owner.sops.yaml`, which sets it in Postgres; change
+both together). The dev-only Secret in `beFree/deploy/00-namespace.yaml` is not
+here on purpose: applying it would overwrite the production password.
 
 ### beconscient
 
 Manifests moved from `beConscient/deploy`. beConscient's CI pushes the images to
 GHCR and Flux image automation (`apps/beconscient/images.yaml`) commits each new
-digest, as for beyou. Database setup, backup and restore procedures are in
+digest. Its database is `beconscient` in the shared Postgres. Its nightly
+backup (`apps/beconscient/backup.yaml`) also dumps befree's database. The
+application-level procedures (keys, replaying collectors after a restore) are in
 `beConscient/deploy/README.md`.
 
 ### beyou
@@ -119,22 +178,28 @@ docs site (docs.beyouweb.com) and the backend (api.beyouweb.com, and `/api/v1/`
 behind both nginx through the `backend` Service). Its database is `beyou` in
 the shared Postgres (`data/`), its uploads the `beyou-uploads` volume.
 
-GlitchTip is still a compose container: `apps/beyou/glitchtip-bridge.yaml`
-relays the backend's `glitchtip:8000` to it until it moves in (phase 4).
+The backend's error DSN and heartbeat URLs name `glitchtip:8000`, as they did
+in compose; `apps/beyou/glitchtip.yaml` is an ExternalName alias to GlitchTip's
+own namespace. Local development still runs from `Beyou-dev-env`'s compose
+files, which no longer carry anything for production.
 
-Images are pinned by digest and deployed by Flux image automation
-(`apps/beyou/images.yaml`): when CI pushes a new `latest`, Flux commits its digest
-here and rolls it out, within about five minutes. Roll back with `git revert`;
-hold deploys with `flux suspend image update beyou`.
+### glitchtip
 
-The read-only role for Grafana needs its grants from the database owner, once
-(they also cover tables created later):
+GlitchTip 6 (web, worker and migrations in one process) at mnt.beyouweb.com,
+with a Valkey that keeps nothing across restarts and its database in the shared
+Postgres. The browser SDKs reach it through Traefik; the backends through the
+Service. Its uptime monitors live in its database and point at cluster Services
+(`backend.beyou.svc:9091`, `pg-rw.data.svc:5432`, the monitoring stack), which
+is why those namespaces let `glitchtip` in on the health ports.
 
-```sql
-GRANT USAGE ON SCHEMA public TO beyou_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO beyou_readonly;
-ALTER DEFAULT PRIVILEGES FOR ROLE beyou IN SCHEMA public GRANT SELECT ON TABLES TO beyou_readonly;
-```
+### omniroute
+
+OmniRoute, the OpenAI-compatible gateway the beyou backend uses for its generic
+LLM provider, at omniroute.beyouweb.com (its `/v1` needs an API key). Its state
+is one SQLite file on the `omniroute-data` volume; `STORAGE_ENCRYPTION_KEY` and
+`API_KEY_SECRET` in its Secret are what make the stored provider keys readable,
+so they must never be regenerated. It tracks the upstream `:next` tag pinned by
+digest, updated by hand.
 
 ## Bootstrapping a new cluster
 

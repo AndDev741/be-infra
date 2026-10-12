@@ -60,9 +60,6 @@ spec:
         retention: 15d
         retentionSize: 8GB
         scrapeInterval: 30s
-        # Alloy pushes what it scrapes on the Docker side (the beyou stack still
-        # in compose) through remote write.
-        enableRemoteWriteReceiver: true
         # Select monitors and rules from every namespace, not only this release's.
         serviceMonitorSelectorNilUsesHelmValues: false
         podMonitorSelectorNilUsesHelmValues: false

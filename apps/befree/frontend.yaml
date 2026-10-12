@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: ghcr.io/anddev741/befree-frontend:latest
+          image: ghcr.io/anddev741/befree-frontend:latest@sha256:7fd0ca4af0d92eea736e159b4806bfdc164c3574689865be3c997a8f909e71d1 # {"$imagepolicy": "befree:befree-frontend"}
           ports:
             - containerPort: 8080
           resources:

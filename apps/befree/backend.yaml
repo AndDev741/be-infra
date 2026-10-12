@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/anddev741/befree-backend:latest
+          image: ghcr.io/anddev741/befree-backend:latest@sha256:3c5b0dc90d94799b935dc0b3d1fb5344ffda76babd97366a543fbe0daf6df25f # {"$imagepolicy": "befree:befree-backend"}
           ports:
             - containerPort: 8080
           env:

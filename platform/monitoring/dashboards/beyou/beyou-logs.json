@@ -1,77 +1,134 @@
 {
   "__comment": "Hand-authored (no generator script — unlike beyou-service-health.json this is three panels, not thirty). Queries rely on the stream labels set in monitoring/alloy/config.alloy (project/service/container) and on Loki's server-side level detection (detected_level, see monitoring/loki/loki.yml).",
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "graphTooltip": 1,
   "id": null,
   "links": [],
   "panels": [
     {
-      "datasource": { "type": "loki", "uid": "loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {
             "drawStyle": "bars",
             "fillOpacity": 60,
             "lineWidth": 0,
-            "stacking": { "group": "A", "mode": "normal" }
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({project=~\"$project\", service=~\"$service\"} | detected_level=~\"$level\" [$__auto]))",
-          "legendFormat": "{{service}}",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (app) (count_over_time({namespace=~\"$namespace\", app=~\"$app\"} | detected_level=~\"$level\" [$__auto]))",
+          "legendFormat": "{{app}}",
           "refId": "A"
         }
       ],
-      "title": "Log volume by service",
+      "title": "Log volume by app",
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "loki", "uid": "loki" },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "fieldConfig": {
         "defaults": {
           "custom": {
             "drawStyle": "bars",
             "fillOpacity": 60,
             "lineWidth": 0,
-            "stacking": { "group": "A", "mode": "normal" }
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
           },
-          "color": { "mode": "fixed", "fixedColor": "red" },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
       "id": 2,
       "options": {
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({project=~\"$project\", service=~\"$service\"} | detected_level=\"error\" [$__auto]))",
-          "legendFormat": "{{service}}",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (app) (count_over_time({namespace=~\"$namespace\", app=~\"$app\"} | detected_level=\"error\" [$__auto]))",
+          "legendFormat": "{{app}}",
           "refId": "A"
         }
       ],
-      "title": "Errors by service",
+      "title": "Errors by app",
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "h": 18, "w": 24, "x": 0, "y": 8 },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 18,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
       "id": 3,
       "options": {
         "dedupStrategy": "none",
@@ -85,8 +142,11 @@
       },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{project=~\"$project\", service=~\"$service\"} | detected_level=~\"$level\" |~ `(?i)$search`",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{namespace=~\"$namespace\", app=~\"$app\"} | detected_level=~\"$level\" |~ `(?i)$search`",
           "refId": "A"
         }
       ],
@@ -96,34 +156,77 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["beyou", "logs"],
+  "tags": [
+    "beyou",
+    "logs"
+  ],
   "templating": {
     "list": [
       {
-        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
-        "datasource": { "type": "loki", "uid": "loki" },
+        "current": {
+          "selected": true,
+          "text": [
+            "beyou"
+          ],
+          "value": [
+            "beyou"
+          ]
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
         "includeAll": true,
-        "label": "Project",
+        "label": "Namespace",
         "multi": true,
-        "name": "project",
-        "query": { "label": "project", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "", "type": 1 },
+        "name": "namespace",
+        "query": {
+          "label": "namespace",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "",
+          "type": 1
+        },
         "refresh": 2,
         "type": "query"
       },
       {
-        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
-        "datasource": { "type": "loki", "uid": "loki" },
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
         "includeAll": true,
-        "label": "Service",
+        "label": "App",
         "multi": true,
-        "name": "service",
-        "query": { "label": "service", "refId": "LokiVariableQueryEditor-VariableQuery", "stream": "{project=~\"$project\"}", "type": 1 },
+        "name": "app",
+        "query": {
+          "label": "app",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "{namespace=~\"$namespace\"}",
+          "type": 1
+        },
         "refresh": 2,
         "type": "query"
       },
       {
         "allValue": ".*",
-        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
         "includeAll": true,
         "label": "Level",
         "multi": true,
@@ -133,7 +236,10 @@
         "type": "custom"
       },
       {
-        "current": { "text": "", "value": "" },
+        "current": {
+          "text": "",
+          "value": ""
+        },
         "label": "Search",
         "name": "search",
         "options": [],
@@ -142,7 +248,10 @@
       }
     ]
   },
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "Beyou Logs",

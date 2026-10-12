@@ -15,3 +15,4 @@ resources:
   - backend.yaml
   - frontend.yaml
   - ingress.yaml
+  - images.yaml
