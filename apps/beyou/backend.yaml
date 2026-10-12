@@ -24,12 +24,12 @@ metadata:
   namespace: beyou
 spec:
   replicas: 1
-  strategy: { type: Recreate }
+  strategy: {type: Recreate}
   selector:
-    matchLabels: { app: beyou-backend }
+    matchLabels: {app: beyou-backend}
   template:
     metadata:
-      labels: { app: beyou-backend }
+      labels: {app: beyou-backend}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -39,18 +39,18 @@ spec:
         runAsNonRoot: true
       containers:
         - name: backend
-          image: ghcr.io/anddev741/beyou-backend:latest@sha256:43ea5bb137301d4af68d0216a83861132f7b1864dfa88fd5b364a62a0c978ff9 # {"$imagepolicy": "beyou:beyou-backend"}
+          image: ghcr.io/anddev741/beyou-backend:latest@sha256:f1700fb468723dca8e2fad994836074a560138cd0a09567d44739044f723f783 # {"$imagepolicy": "beyou:beyou-backend"}
           envFrom:
             - secretRef:
                 name: beyou-backend
           env:
-            - { name: DATABASE_URL, value: "jdbc:postgresql://pg-rw.data.svc:5432/beyou" }
-            - { name: DATABASE_USERNAME, value: beyou }
-            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://pg-rw.data.svc:5432/beyou" }
-            - { name: SPRING_DATASOURCE_USERNAME, value: beyou }
-            - { name: UPLOAD_DIR, value: /data/uploads }
-            - { name: MANAGEMENT_PORT, value: "9091" }
-            - { name: MANAGEMENT_ADDRESS, value: 0.0.0.0 }
+            - {name: DATABASE_URL, value: "jdbc:postgresql://pg-rw.data.svc:5432/beyou"}
+            - {name: DATABASE_USERNAME, value: beyou}
+            - {name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://pg-rw.data.svc:5432/beyou"}
+            - {name: SPRING_DATASOURCE_USERNAME, value: beyou}
+            - {name: UPLOAD_DIR, value: /data/uploads}
+            - {name: MANAGEMENT_PORT, value: "9091"}
+            - {name: MANAGEMENT_ADDRESS, value: 0.0.0.0}
             # The heap follows the container limit (55% of it, ~700Mi), and
             # metaspace is capped so it cannot grow into the limit unnoticed.
             # Non-heap (metaspace, code cache, threads) takes ~260Mi on top: at
@@ -63,26 +63,26 @@ spec:
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -XX:G1PeriodicGCInterval=300000
           ports:
-            - { name: http, containerPort: 8099 }
-            - { name: metrics, containerPort: 9091 }
+            - {name: http, containerPort: 8099}
+            - {name: metrics, containerPort: 9091}
           resources:
-            requests: { cpu: 200m, memory: 896Mi }
-            limits: { memory: 1280Mi }
+            requests: {cpu: 200m, memory: 896Mi}
+            limits: {memory: 1280Mi}
           volumeMounts:
             - name: uploads
               mountPath: /data/uploads
           # Spring Boot exposes the liveness and readiness groups on its own
           # when it detects Kubernetes; readiness includes the database.
           startupProbe:
-            httpGet: { path: /actuator/health/liveness, port: metrics }
+            httpGet: {path: /actuator/health/liveness, port: metrics}
             periodSeconds: 5
             failureThreshold: 36
           livenessProbe:
-            httpGet: { path: /actuator/health/liveness, port: metrics }
+            httpGet: {path: /actuator/health/liveness, port: metrics}
             periodSeconds: 15
             failureThreshold: 4
           readinessProbe:
-            httpGet: { path: /actuator/health/readiness, port: metrics }
+            httpGet: {path: /actuator/health/readiness, port: metrics}
             periodSeconds: 10
       volumes:
         - name: uploads
@@ -96,13 +96,13 @@ kind: Service
 metadata:
   name: backend
   namespace: beyou
-  labels: { app: beyou-backend }
+  labels: {app: beyou-backend}
 spec:
   type: ClusterIP
-  selector: { app: beyou-backend }
+  selector: {app: beyou-backend}
   ports:
-    - { name: http, port: 8099 }
-    - { name: metrics, port: 9091 }
+    - {name: http, port: 8099}
+    - {name: metrics, port: 9091}
 ---
 # The job is named after the Service's `app` label, `beyou-backend`, the name
 # the beyou dashboards already query.
@@ -114,7 +114,7 @@ metadata:
 spec:
   jobLabel: app
   selector:
-    matchLabels: { app: beyou-backend }
+    matchLabels: {app: beyou-backend}
   endpoints:
     - port: metrics
       path: /actuator/prometheus
