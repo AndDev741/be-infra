@@ -1,14 +1,5 @@
-# One collector on the node for everything that is not scraped by Prometheus
-# directly:
-#   - logs of every pod (files under /var/log/pods)        -> Loki
-#   - logs of every Docker container (the compose side)    -> Loki
-#   - metrics of the beyou stack still in compose          -> Prometheus (remote write)
-#
-# It uses the host network because Docker drops forwarded traffic to ports a
-# container does not publish, so a pod cannot reach backend:9091, cAdvisor or
-# the exporters; the host itself can. The Docker half goes away once beyou has
-# moved (roadmap phases 3-4); job names match the old compose Prometheus so the
-# existing beyou dashboards keep working.
+# One collector on the node for the logs of every pod (files under
+# /var/log/pods), shipped to Loki. Metrics are scraped by Prometheus directly.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
@@ -38,25 +29,13 @@ spec:
   values:
     controller:
       type: daemonset
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
-      volumes:
-        extra:
-          - name: docker-sock
-            hostPath:
-              path: /var/run/docker.sock
-              type: Socket
     serviceMonitor:
       enabled: true
     alloy:
-      # 12345 is taken on the host by the compose Alloy until it is retired.
+      # GlitchTip's uptime monitor and the monitoring NetworkPolicy use this port.
       listenPort: 12350
       mounts:
         varlog: true
-        extra:
-          - name: docker-sock
-            mountPath: /var/run/docker.sock
-            readOnly: true
       resources:
         requests: { cpu: 50m, memory: 96Mi }
         limits: { memory: 384Mi }
@@ -117,69 +96,7 @@ spec:
             forward_to = [loki.write.local.receiver]
           }
 
-          // ---------- Docker (compose): logs ----------
-          discovery.docker "host" {
-            host             = "unix:///var/run/docker.sock"
-            refresh_interval = "15s"
-          }
-
-          discovery.relabel "docker_logs" {
-            targets = discovery.docker.host.targets
-            rule {
-              source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-              target_label  = "service"
-            }
-            rule {
-              source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
-              target_label  = "project"
-            }
-            rule {
-              source_labels = ["__meta_docker_container_name"]
-              regex         = "/(.*)"
-              target_label  = "container"
-            }
-          }
-
-          loki.source.docker "containers" {
-            host             = "unix:///var/run/docker.sock"
-            targets          = discovery.relabel.docker_logs.output
-            refresh_interval = "15s"
-            forward_to       = [loki.write.local.receiver]
-          }
-
-          // ---------- Docker (compose): beyou metrics ----------
-          discovery.relabel "docker_metrics" {
-            targets = discovery.docker.host.targets
-            rule {
-              source_labels = ["__meta_docker_network_name"]
-              regex         = "beyou_net"
-              action        = "keep"
-            }
-            rule {
-              source_labels = ["__meta_docker_container_label_com_docker_compose_service", "__meta_docker_port_private"]
-              separator     = ":"
-              regex         = "cadvisor:8080"
-              action        = "keep"
-            }
-            rule {
-              source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-              target_label  = "job"
-            }
-          }
-
-          prometheus.scrape "docker" {
-            targets         = discovery.relabel.docker_metrics.output
-            scrape_interval = "15s"
-            forward_to      = [prometheus.remote_write.prometheus.receiver]
-          }
-
           // ---------- Outputs ----------
-          prometheus.remote_write "prometheus" {
-            endpoint {
-              url = "http://kps-prometheus.monitoring.svc:9090/api/v1/write"
-            }
-          }
-
           loki.write "local" {
             endpoint {
               url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
