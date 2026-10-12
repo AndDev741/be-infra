@@ -158,7 +158,7 @@ spec:
             rule {
               source_labels = ["__meta_docker_container_label_com_docker_compose_service", "__meta_docker_port_private"]
               separator     = ":"
-              regex         = "cadvisor:8080|glitchtip:8000"
+              regex         = "cadvisor:8080"
               action        = "keep"
             }
             rule {
