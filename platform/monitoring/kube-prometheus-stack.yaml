@@ -110,9 +110,13 @@ spec:
         enabled: true
         storageClassName: local-path
         size: 1Gi
+      # 384Mi got OOMKilled (Grafana 13 sits at ~400Mi with a few dashboards open).
+      # GOMEMLIMIT makes the Go GC work harder before the cgroup limit is hit.
       resources:
-        requests: { cpu: 20m, memory: 128Mi }
-        limits: { memory: 384Mi }
+        requests: { cpu: 50m, memory: 320Mi }
+        limits: { memory: 768Mi }
+      env:
+        GOMEMLIMIT: 640MiB
       ingress:
         enabled: true
         ingressClassName: traefik
