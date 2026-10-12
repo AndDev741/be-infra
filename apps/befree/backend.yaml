@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/anddev741/befree-backend:latest@sha256:3c5b0dc90d94799b935dc0b3d1fb5344ffda76babd97366a543fbe0daf6df25f # {"$imagepolicy": "befree:befree-backend"}
+          image: ghcr.io/anddev741/befree-backend:latest@sha256:c4cadf30e4fe38166a511be24ce3860ca75ab2e83c8b6f7b880960716f27d2b6 # {"$imagepolicy": "befree:befree-backend"}
           ports:
             - containerPort: 8080
           env:
@@ -24,10 +24,10 @@ spec:
               value: jdbc:postgresql://pg-rw.data.svc:5432/befree
             - name: QUARKUS_DATASOURCE_USERNAME
               valueFrom:
-                secretKeyRef: { name: befree-db, key: user }
+                secretKeyRef: {name: befree-db, key: user}
             - name: QUARKUS_DATASOURCE_PASSWORD
               valueFrom:
-                secretKeyRef: { name: befree-db, key: password }
+                secretKeyRef: {name: befree-db, key: password}
             # Created out-of-band, never committed:
             #   kubectl -n befree create secret generic befree-whatsapp \
             #     --from-literal=access-token=<System User token> \
@@ -37,29 +37,29 @@ spec:
             #     --from-literal=allowed-phones=<351912345678>
             - name: WHATSAPP_ACCESS_TOKEN
               valueFrom:
-                secretKeyRef: { name: befree-whatsapp, key: access-token, optional: true }
+                secretKeyRef: {name: befree-whatsapp, key: access-token, optional: true}
             - name: WHATSAPP_PHONE_NUMBER_ID
               valueFrom:
-                secretKeyRef: { name: befree-whatsapp, key: phone-number-id, optional: true }
+                secretKeyRef: {name: befree-whatsapp, key: phone-number-id, optional: true}
             - name: WHATSAPP_VERIFY_TOKEN
               valueFrom:
-                secretKeyRef: { name: befree-whatsapp, key: verify-token, optional: true }
+                secretKeyRef: {name: befree-whatsapp, key: verify-token, optional: true}
             - name: WHATSAPP_APP_SECRET
               valueFrom:
-                secretKeyRef: { name: befree-whatsapp, key: app-secret, optional: true }
+                secretKeyRef: {name: befree-whatsapp, key: app-secret, optional: true}
             - name: WHATSAPP_ALLOWED_PHONES
               valueFrom:
-                secretKeyRef: { name: befree-whatsapp, key: allowed-phones, optional: true }
+                secretKeyRef: {name: befree-whatsapp, key: allowed-phones, optional: true}
             # AI assistant (DeepSeek, OpenAI-compatible). Without it the chat falls back to the regex parser:
             #   kubectl -n befree create secret generic befree-deepseek --from-literal=api-key=<sk-...>
             - name: QUARKUS_LANGCHAIN4J_OPENAI_API_KEY
               valueFrom:
-                secretKeyRef: { name: befree-deepseek, key: api-key, optional: true }
+                secretKeyRef: {name: befree-deepseek, key: api-key, optional: true}
             # Voice notes (Groq/OpenAI Whisper). Optional:
             #   kubectl -n befree create secret generic befree-transcription --from-literal=api-key=<gsk_...>
             - name: BEFREE_TRANSCRIPTION_API_KEY
               valueFrom:
-                secretKeyRef: { name: befree-transcription, key: api-key, optional: true }
+                secretKeyRef: {name: befree-transcription, key: api-key, optional: true}
             # Login password and the key that signs the session cookie. Without the
             # key, every restart logs you out:
             #   kubectl -n befree create secret generic befree-auth \
@@ -67,17 +67,17 @@ spec:
             #     --from-literal=session-key="$(openssl rand -base64 32)"
             - name: BEFREE_PASSWORD
               valueFrom:
-                secretKeyRef: { name: befree-auth, key: password, optional: true }
+                secretKeyRef: {name: befree-auth, key: password, optional: true}
             - name: BEFREE_SESSION_KEY
               valueFrom:
-                secretKeyRef: { name: befree-auth, key: session-key, optional: true }
+                secretKeyRef: {name: befree-auth, key: session-key, optional: true}
           resources:
-            requests: { memory: 64Mi, cpu: 100m }
-            limits: { memory: 160Mi }
+            requests: {memory: 64Mi, cpu: 100m}
+            limits: {memory: 160Mi}
           readinessProbe:
-            httpGet: { path: /q/health/ready, port: 8080 }
+            httpGet: {path: /q/health/ready, port: 8080}
           livenessProbe:
-            httpGet: { path: /q/health/live, port: 8080 }
+            httpGet: {path: /q/health/live, port: 8080}
 ---
 apiVersion: v1
 kind: Service
