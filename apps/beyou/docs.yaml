@@ -12,22 +12,22 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: beyou-docs }
+    matchLabels: {app: beyou-docs}
   template:
     metadata:
-      labels: { app: beyou-docs }
+      labels: {app: beyou-docs}
     spec:
       automountServiceAccountToken: false
       containers:
         - name: nginx
-          image: ghcr.io/anddev741/beyou-docs:latest@sha256:42b261dd8dae095a8c3ea45022ba67a380b5178eb18f8b035278397c2cf50fb0 # {"$imagepolicy": "beyou:beyou-docs"}
+          image: ghcr.io/anddev741/beyou-docs:latest@sha256:413cfb8f2bcf31de96b9e02bc61f25a31f3a6dce2ab7f57e477a5d5bd93b6938 # {"$imagepolicy": "beyou:beyou-docs"}
           ports:
             - containerPort: 80
           resources:
-            requests: { cpu: 10m, memory: 16Mi }
-            limits: { memory: 64Mi }
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}
           readinessProbe:
-            httpGet: { path: /, port: 80 }
+            httpGet: {path: /, port: 80}
             periodSeconds: 10
 ---
 apiVersion: v1
@@ -37,6 +37,6 @@ metadata:
   namespace: beyou
 spec:
   type: ClusterIP
-  selector: { app: beyou-docs }
+  selector: {app: beyou-docs}
   ports:
     - port: 80
