@@ -373,6 +373,9 @@ spec:
                       expression: A
                       conditions:
                         - evaluator: { type: lt, params: [1] }
+      # Provisioned once by the chart, before Alertmanager was turned off.
+      deleteDatasources:
+        - { name: Alertmanager, orgId: 1 }
       additionalDataSources:
         - name: Loki
           uid: loki
