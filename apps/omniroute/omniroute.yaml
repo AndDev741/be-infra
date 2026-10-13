@@ -51,8 +51,9 @@ spec:
           env:
             - { name: DATA_DIR, value: /app/data }
             - { name: REDIS_URL, value: "redis://redis:6379" }
-            # Heap cap; the container limit below leaves room for the rest.
-            - { name: OMNIROUTE_MEMORY_MB, value: "768" }
+            # Heap cap; the container limit below leaves room for the rest. At
+            # 768 the heap grew to ~400Mi just because it could.
+            - { name: OMNIROUTE_MEMORY_MB, value: "384" }
           ports:
             - name: http
               containerPort: 20128
@@ -77,8 +78,8 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
           resources:
-            requests: { cpu: 50m, memory: 384Mi }
-            limits: { memory: 1Gi }
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 640Mi }
       volumes:
         - name: data
           persistentVolumeClaim:

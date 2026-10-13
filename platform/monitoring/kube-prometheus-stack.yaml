@@ -47,6 +47,28 @@ spec:
     kubeControllerManager: { enabled: false }
     kubeScheduler: { enabled: false }
     kubeProxy: { enabled: false }
+    # k3s is one binary, so the kubelet's /metrics also carries the API server's,
+    # etcd's and the workqueues' metrics: ~38k series duplicating the apiserver
+    # job. Keep only what is the kubelet's own (the default rules and the Kubelet
+    # dashboard use these).
+    kubelet:
+      serviceMonitor:
+        metricRelabelings:
+          - action: keep
+            sourceLabels: [__name__]
+            regex: (kubelet_.*|storage_operation_.*|volume_manager_.*|prober_probe_total|process_.*|rest_client_requests_total)
+    # The API server's histograms are most of its ~30k series. Keep the SLI
+    # histogram the default burn-rate rules read (with the chart's own trim of
+    # its buckets), drop the buckets nothing here reads.
+    kubeApiServer:
+      serviceMonitor:
+        metricRelabelings:
+          - action: drop
+            sourceLabels: [__name__, le]
+            regex: (etcd_request|apiserver_request_slo|apiserver_request_sli|apiserver_request)_duration_seconds_bucket;(0\.15|0\.2|0\.3|0\.35|0\.4|0\.45|0\.6|0\.7|0\.8|0\.9|1\.25|1\.5|1\.75|2|3|3\.5|4|4\.5|6|7|8|9|15|20|40|45|50)(\.0)?
+          - action: drop
+            sourceLabels: [__name__]
+            regex: (etcd_request_duration_seconds|apiserver_request_duration_seconds|apiserver_request_slo_duration_seconds|apiserver_watch_list_duration_seconds|apiserver_request_body_size_bytes|apiserver_watch_cache_read_wait_seconds|apiserver_watch_events_sizes|apiserver_response_sizes|workqueue_work_duration_seconds|workqueue_queue_duration_seconds|apiserver_admission_controller_admission_duration_seconds|apiserver_admission_step_admission_duration_seconds|apiserver_admission_webhook_admission_duration_seconds)_bucket
     defaultRules:
       rules:
         etcd: false
@@ -59,7 +81,10 @@ spec:
       prometheusSpec:
         retention: 15d
         retentionSize: 8GB
-        scrapeInterval: 30s
+        # 60s halves the samples kept in memory; every dashboard and rule here
+        # uses windows of 5m or more.
+        scrapeInterval: 60s
+        evaluationInterval: 60s
         # Select monitors and rules from every namespace, not only this release's.
         serviceMonitorSelectorNilUsesHelmValues: false
         podMonitorSelectorNilUsesHelmValues: false
@@ -107,13 +132,19 @@ spec:
         enabled: true
         storageClassName: local-path
         size: 1Gi
-      # 384Mi got OOMKilled (Grafana 13 sits at ~400Mi with a few dashboards open).
-      # GOMEMLIMIT makes the Go GC work harder before the cgroup limit is hit.
+      # Grafana 13 starts a process for every bundled backend datasource plugin,
+      # used or not (~20-40Mi each). Only Prometheus, Loki and Postgres are used
+      # here; the rest are disabled in grafana.ini below. GOMEMLIMIT makes the Go
+      # GC work harder before the cgroup limit is hit.
       resources:
-        requests: { cpu: 50m, memory: 320Mi }
-        limits: { memory: 768Mi }
+        requests: { cpu: 50m, memory: 256Mi }
+        limits: { memory: 512Mi }
       env:
-        GOMEMLIMIT: 640MiB
+        GOMEMLIMIT: 384MiB
+      # Grafana's own metrics (~3k series) are not read by anything here;
+      # GlitchTip's uptime monitor covers its health.
+      serviceMonitor:
+        enabled: false
       ingress:
         enabled: true
         ingressClassName: traefik
@@ -127,6 +158,13 @@ spec:
         analytics:
           reporting_enabled: false
           check_for_updates: false
+          check_for_plugin_updates: false
+        plugins:
+          # Nothing here uses these, and each backend one is a running process.
+          disable_plugins: grafana-azure-monitor-datasource,cloudwatch,elasticsearch,stackdriver,grafana-pyroscope-datasource,graphite,influxdb,jaeger,mssql,mysql,opentsdb,tempo,grafana-testdata-datasource,zipkin,alertmanager,grafana-pyroscope-app,grafana-exploretraces-app,grafana-advisor-app
+          preinstall_disabled: true
+        news:
+          news_feed_enabled: false
       # Mail goes out through the same Gmail SMTP GlitchTip uses (secret
       # grafana-smtp). ALERT_EMAIL comes from that secret too, so the address
       # is not in this public repo; Grafana expands $VARS in provisioning files.
@@ -358,6 +396,10 @@ spec:
             maxIdleConns: 1
           secureJsonData:
             password: $BEYOU_DB_PASSWORD
+      # The dashboard and datasource sidecars (~80Mi of Python each) run once,
+      # as init containers, instead of watching for changes all day. A new or
+      # changed dashboard ConfigMap therefore shows up after a Grafana restart:
+      #   kubectl -n monitoring rollout restart deploy/grafana
       sidecar:
         dashboards:
           # Dashboards are ConfigMaps labelled grafana_dashboard=1 in any
@@ -366,3 +408,11 @@ spec:
           folderAnnotation: grafana_folder
           provider:
             foldersFromFilesStructure: true
+          initDashboards: true
+          skipReload: true
+        datasources:
+          initDatasources: true
+          skipReload: true
+          # There is no Alertmanager (alerts are Grafana-managed).
+          alertmanager:
+            enabled: false
