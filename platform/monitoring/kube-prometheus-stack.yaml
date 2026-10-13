@@ -57,12 +57,23 @@ spec:
           - action: keep
             sourceLabels: [__name__]
             regex: (kubelet_.*|storage_operation_.*|volume_manager_.*|prober_probe_total|process_.*|rest_client_requests_total)
-    # The API server's histograms are most of its ~30k series. Keep the SLI
-    # histogram the default burn-rate rules read (with the chart's own trim of
-    # its buckets), drop the buckets nothing here reads.
+        # Probe latency per container, in buckets; prober_probe_total covers
+        # whether the probes pass.
+        probesMetricRelabelings:
+          - action: drop
+            sourceLabels: [__name__]
+            regex: prober_probe_duration_seconds_bucket
+    # The API server's job also carries the whole k3s binary (scheduler,
+    # kubelet, kine), and its histograms are most of its ~30k series. Keep only
+    # the API server's own metrics (and the aggregator's, for its alert), keep
+    # the SLI histogram the default burn-rate rules read (with the chart's own
+    # trim of its buckets), and drop the buckets nothing here reads.
     kubeApiServer:
       serviceMonitor:
         metricRelabelings:
+          - action: keep
+            sourceLabels: [__name__]
+            regex: (apiserver_.*|aggregator_.*|etcd_.*|process_.*)
           - action: drop
             sourceLabels: [__name__, le]
             regex: (etcd_request|apiserver_request_slo|apiserver_request_sli|apiserver_request)_duration_seconds_bucket;(0\.15|0\.2|0\.3|0\.35|0\.4|0\.45|0\.6|0\.7|0\.8|0\.9|1\.25|1\.5|1\.75|2|3|3\.5|4|4\.5|6|7|8|9|15|20|40|45|50)(\.0)?
