@@ -102,9 +102,12 @@ spec:
         ruleSelectorNilUsesHelmValues: false
         probeSelectorNilUsesHelmValues: false
         scrapeConfigSelectorNilUsesHelmValues: false
+        # Prometheus 3 sets GOMEMLIMIT to 90% of the limit and keeps freed
+        # memory up to it: at 1Gi it sat at ~510Mi with a 240Mi heap. With the
+        # trimmed scrapes (~36k series) 512Mi leaves room for compactions.
         resources:
-          requests: { cpu: 100m, memory: 384Mi }
-          limits: { memory: 1Gi }
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { memory: 512Mi }
         storageSpec:
           volumeClaimTemplate:
             spec:
