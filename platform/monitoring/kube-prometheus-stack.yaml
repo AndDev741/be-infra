@@ -408,9 +408,12 @@ spec:
           folderAnnotation: grafana_folder
           provider:
             foldersFromFilesStructure: true
+          # LIST: read once and exit (WATCH would never let the pod start).
+          watchMethod: LIST
           initDashboards: true
           skipReload: true
         datasources:
+          watchMethod: LIST
           initDatasources: true
           skipReload: true
           # There is no Alertmanager (alerts are Grafana-managed).
