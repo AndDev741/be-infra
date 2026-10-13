@@ -66,7 +66,13 @@ Grafana at https://obs.beyouweb.com (admin login in
   monitors on each component's health endpoint, and heartbeats for the
   scheduled jobs and backups.
 - **Dashboards** are ConfigMaps labelled `grafana_dashboard: "1"`, in any
-  namespace; the `grafana_folder` annotation picks the folder.
+  namespace; the `grafana_folder` annotation picks the folder. Grafana reads
+  them when it starts (the sidecars run as init containers to save memory), so
+  after adding or changing one: `kubectl -n monitoring rollout restart deploy/grafana`.
+- **What is scraped is trimmed**: on k3s the kubelet and API server endpoints
+  each serve the whole k3s binary's metrics, so each job keeps only its own,
+  and histogram buckets nothing reads are dropped (`kube-prometheus-stack.yaml`).
+  Scrapes run every 60s.
 - **An app declares its own scraping** with a ServiceMonitor or PodMonitor in
   its namespace, plus a NetworkPolicy letting the `monitoring` namespace in.
   befree and beconscient expose no metrics endpoint yet.
