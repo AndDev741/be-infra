@@ -12,30 +12,30 @@ spec:
   strategy:
     type: Recreate
   selector:
-    matchLabels: { app: beconscient-backend }
+    matchLabels: {app: beconscient-backend}
   template:
     metadata:
-      labels: { app: beconscient-backend }
+      labels: {app: beconscient-backend}
     spec:
       securityContext:
         runAsNonRoot: true
       containers:
         - name: backend
-          image: ghcr.io/anddev741/beconscient-backend:latest@sha256:2626da8045aedb1e35b876784d0ffa1dfc2b116d92c5c933bc5ffa1bda0d9ca2 # {"$imagepolicy": "beconscient:beconscient-backend"}
+          image: ghcr.io/anddev741/beconscient-backend:latest@sha256:dcb298727066e361b7ad177371a85a5746f3f7c90b5d5261fba0f35d821bb933 # {"$imagepolicy": "beconscient:beconscient-backend"}
           ports:
             - containerPort: 8080
           envFrom:
-            - secretRef: { name: beconscient-db }
-            - secretRef: { name: beconscient-auth }
-            - secretRef: { name: beconscient-hpke }
+            - secretRef: {name: beconscient-db}
+            - secretRef: {name: beconscient-auth}
+            - secretRef: {name: beconscient-hpke}
           resources:
-            requests: { cpu: 100m, memory: 64Mi }
-            limits: { memory: 160Mi }
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 160Mi}
           readinessProbe:
-            httpGet: { path: /q/health/ready, port: 8080 }
+            httpGet: {path: /q/health/ready, port: 8080}
             periodSeconds: 10
           livenessProbe:
-            httpGet: { path: /q/health/live, port: 8080 }
+            httpGet: {path: /q/health/live, port: 8080}
             initialDelaySeconds: 20
             periodSeconds: 20
           securityContext:
@@ -54,7 +54,7 @@ metadata:
   name: beconscient-backend
   namespace: beconscient
 spec:
-  selector: { app: beconscient-backend }
+  selector: {app: beconscient-backend}
   ports:
     - port: 80
       targetPort: 8080
