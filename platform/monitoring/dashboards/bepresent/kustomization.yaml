@@ -1,0 +1,16 @@
+# The bePresent dashboard: the Immich library (through the read-only
+# "Immich Postgres" datasource), the server it runs on, Immich's pods and the
+# ML scheduler's log.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: bePresent
+configMapGenerator:
+  - name: dashboards-bepresent
+    files:
+      - bepresent-immich.json

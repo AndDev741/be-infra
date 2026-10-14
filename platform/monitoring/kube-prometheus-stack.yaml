@@ -185,6 +185,7 @@ spec:
       envFromSecrets:
         - name: grafana-smtp
         - name: grafana-beyou-db
+        - name: grafana-immich-db
       alerting:
         contactpoints.yaml:
           apiVersion: 1
@@ -413,6 +414,23 @@ spec:
             maxIdleConns: 1
           secureJsonData:
             password: $BEYOU_DB_PASSWORD
+        # Immich's own Postgres, read-only, for the bePresent dashboard. The
+        # role can SELECT only the library tables (apps/immich/postgres.yaml).
+        - name: Immich Postgres
+          uid: immich-postgres
+          type: grafana-postgresql-datasource
+          url: immich-pg-rw.immich.svc:5432
+          user: grafana_readonly
+          access: proxy
+          editable: false
+          jsonData:
+            database: immich
+            sslmode: require
+            postgresVersion: 1700
+            maxOpenConns: 2
+            maxIdleConns: 1
+          secureJsonData:
+            password: $IMMICH_DB_PASSWORD
       # The dashboard and datasource sidecars (~80Mi of Python each) run once,
       # as init containers, instead of watching for changes all day. A new or
       # changed dashboard ConfigMap therefore shows up after a Grafana restart:

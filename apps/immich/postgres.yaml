@@ -11,6 +11,11 @@
 #
 # CloudNativePG writes the credentials to the immich-pg-app Secret; the server
 # reads its `uri` key.
+#
+# grafana_readonly feeds the bePresent dashboard. It can SELECT only the
+# library tables listed in scripts/grant-immich-grafana-readonly.sh (no users,
+# sessions or API keys); its password is also in the monitoring namespace's
+# grafana-immich-db Secret. Change both together.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -35,6 +40,13 @@ spec:
     parameters:
       shared_buffers: 96MB
       max_connections: "40"
+  managed:
+    roles:
+      - name: grafana_readonly
+        ensure: present
+        login: true
+        connectionLimit: 3
+        passwordSecret: { name: immich-db-grafana }
   bootstrap:
     initdb:
       database: immich

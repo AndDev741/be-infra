@@ -76,6 +76,25 @@ spec:
       ports:
         - port: 5432
 ---
+# Grafana's read-only datasource for the bePresent dashboard.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-from-grafana
+  namespace: immich
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: immich-pg }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+          podSelector:
+            matchLabels: { app.kubernetes.io/name: grafana }
+      ports:
+        - port: 5432
+---
 # The CloudNativePG operator polls the instance's status endpoint.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
