@@ -1,0 +1,85 @@
+# Immich machine learning: face detection and recognition, and the CLIP
+# embeddings behind smart search. CPU only; since v3 the amd64 image needs
+# x86-64-v2, which the i3-3120M has (no AVX2 needed).
+#
+# Memory is the constraint. Models load on the first request and unload after
+# MODEL_TTL seconds idle, so the pod sits near 200 MB between jobs. With CLIP
+# ViT-B-32 and buffalo_l loaded together it peaks around 1.5 GB. If it gets
+# OOM-killed, pick smaller models in Immich's settings (buffalo_s, RN50).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-machine-learning
+  namespace: immich
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: immich-machine-learning }
+  template:
+    metadata:
+      labels: { app: immich-machine-learning }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: machine-learning
+          image: ghcr.io/immich-app/immich-machine-learning:v3.3.1@sha256:513c831cfb010ad319341a0c86b42c575a0d5b688d3e8cae346ee624074a58ed
+          env:
+            - { name: MACHINE_LEARNING_CACHE_FOLDER, value: /cache }
+            - { name: MACHINE_LEARNING_MODEL_TTL, value: "300" }
+            # Each worker loads its own copy of every model.
+            - { name: MACHINE_LEARNING_WORKERS, value: "1" }
+            # Two of the four threads, so the other apps stay responsive.
+            - { name: MACHINE_LEARNING_REQUEST_THREADS, value: "2" }
+            - { name: MACHINE_LEARNING_MODEL_INTER_OP_THREADS, value: "1" }
+            - { name: MACHINE_LEARNING_MODEL_INTRA_OP_THREADS, value: "2" }
+            # Hugging Face downloads go to the cache volume, not a read-only $HOME.
+            - { name: HF_HOME, value: /cache/huggingface }
+          ports:
+            - name: http
+              containerPort: 3003
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          startupProbe:
+            httpGet: { path: /ping, port: http }
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /ping, port: http }
+            periodSeconds: 30
+            # A request holds the worker while a model loads on this CPU.
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet: { path: /ping, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1536Mi }
+      volumes:
+        - name: cache
+          persistentVolumeClaim:
+            claimName: immich-ml-cache
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-machine-learning
+  namespace: immich
+spec:
+  selector: { app: immich-machine-learning }
+  ports:
+    - name: http
+      port: 3003
+      targetPort: http

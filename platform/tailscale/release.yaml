@@ -1,0 +1,54 @@
+# The way into the private apps. An Ingress with ingressClassName: tailscale
+# gets its own proxy pod and its own device on the tailnet, with a Let's
+# Encrypt certificate: Immich answers at https://immich.tail2f18c7.ts.net and
+# nowhere else. Nothing here goes through the Cloudflare Tunnel or Traefik.
+#
+# Needs, in the Tailscale admin console (README.md, "tailscale"): MagicDNS and
+# HTTPS certificates on, the two tags below in the policy's tagOwners, and an
+# OAuth client whose id and secret are in secrets/operator-oauth.sops.yaml
+# (scripts/create-tailscale-operator-secret.sh).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: tailscale
+  namespace: tailscale
+spec:
+  interval: 24h
+  url: https://pkgs.tailscale.com/helmcharts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tailscale-operator
+  namespace: tailscale
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: tailscale-operator
+      version: 1.104.1
+      sourceRef:
+        kind: HelmRepository
+        name: tailscale
+  values:
+    operatorConfig:
+      # The operator's own device name on the tailnet.
+      hostname: beyou-k8s-operator
+      defaultTags: ["tag:k8s-operator"]
+      image:
+        repository: tailscale/k8s-operator
+        # v1.104.1
+        digest: sha256:38351d6333edc490a832b27b244665d40f4a5fe1765ade76af2264c99dbbfe0e
+        pullPolicy: IfNotPresent
+      resources:
+        requests: { cpu: 10m, memory: 48Mi }
+        limits: { memory: 160Mi }
+    proxyConfig:
+      defaultTags: "tag:k8s"
+      image:
+        repository: tailscale/tailscale
+        # v1.104.1
+        digest: sha256:87c55d6be56ad85b3d8bceca5f87f73de288c609131460dd1be1874c250cc41d
+    # No API server proxy: kubectl keeps going over SSH.
+    apiServerProxyConfig:
+      mode: "false"

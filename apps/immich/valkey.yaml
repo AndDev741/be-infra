@@ -1,0 +1,49 @@
+# Immich's job queue (BullMQ). Same image as GlitchTip's. Nothing in it needs to
+# survive a restart: queued jobs are found again by Immich's "missing" job runs.
+# BullMQ needs noeviction, and the first import queues several jobs per asset
+# for about 10k assets, hence more room than GlitchTip's cache.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-valkey
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: immich-valkey }
+  template:
+    metadata:
+      labels: { app: immich-valkey }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+      containers:
+        - name: valkey
+          image: valkey/valkey:9.1-alpine@sha256:de31910896150d5e754a07d57d227cfdde4e258ddd0d1aa4607f2d2f95843715
+          args: [valkey-server, --save, "", --appendonly, "no", --maxmemory, 192mb, --maxmemory-policy, noeviction]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            tcpSocket: { port: valkey }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-valkey
+  namespace: immich
+spec:
+  selector: { app: immich-valkey }
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey

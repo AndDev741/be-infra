@@ -1,0 +1,23 @@
+# The Tailscale operator (platform/tailscale), the way into the tailnet-only
+# apps. Kept out of `platform` on purpose: if the OAuth client or the tailnet
+# misbehaves, only the private apps lose their door, and every other app keeps
+# reconciling.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tailscale
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 1m
+  path: ./platform/tailscale
+  prune: true
+  wait: true
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

@@ -1,0 +1,41 @@
+# Immich's own Postgres. Immich needs the VectorChord extension, which the
+# shared cluster in data/ does not ship, so it gets a small cluster here on
+# TensorChord's CloudNativePG image (Postgres 17.11, pgvector 0.8.6,
+# vchord 1.1.1; Immich v3.3 accepts vchord >=0.3 <2 and pgvector >=0.7 <0.9).
+# An Immich upgrade can then never touch the other apps' data.
+#
+# The immich role owns the database but is not a superuser, so the extensions
+# are created here at bootstrap. After a vchord upgrade (a new imageName), run
+# as postgres in the immich database:
+#   ALTER EXTENSION vchord UPDATE; REINDEX INDEX face_index; REINDEX INDEX clip_index;
+#
+# CloudNativePG writes the credentials to the immich-pg-app Secret; the server
+# reads its `uri` key.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: immich-pg
+  namespace: immich
+spec:
+  instances: 1
+  imageName: ghcr.io/tensorchord/cloudnative-vectorchord:17.11-1.1.1@sha256:bb7eb8442f76b1e74911f28585019a77022911f8cfa2ddcfb166ea6af85abd09
+  # One instance, nothing to fail over to (same as data/postgres.yaml).
+  enablePDB: false
+  storage:
+    storageClass: local-path
+    size: 5Gi
+  resources:
+    requests: { cpu: 50m, memory: 192Mi }
+    limits: { memory: 512Mi }
+  postgresql:
+    shared_preload_libraries: ["vchord.so"]
+    parameters:
+      shared_buffers: 96MB
+      max_connections: "40"
+  bootstrap:
+    initdb:
+      database: immich
+      owner: immich
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS vchord CASCADE;
+        - CREATE EXTENSION IF NOT EXISTS earthdistance CASCADE;

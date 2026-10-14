@@ -1,0 +1,92 @@
+# Only the Tailscale proxy reaches the server. The server alone reaches ML,
+# Valkey and Postgres. Traefik has no way in, so the photos stay off the
+# tunnel and off the LAN. Egress stays open: model downloads and the map tiles.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: immich
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: server-from-tailnet
+  namespace: immich
+spec:
+  podSelector:
+    matchLabels: { app: immich-server }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: tailscale }
+      ports:
+        - port: 2283
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ml-from-server
+  namespace: immich
+spec:
+  podSelector:
+    matchLabels: { app: immich-machine-learning }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: immich-server }
+      ports:
+        - port: 3003
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: valkey-from-server
+  namespace: immich
+spec:
+  podSelector:
+    matchLabels: { app: immich-valkey }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: immich-server }
+      ports:
+        - port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-from-server
+  namespace: immich
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: immich-pg }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: immich-server }
+      ports:
+        - port: 5432
+---
+# The CloudNativePG operator polls the instance's status endpoint.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-status-from-operator
+  namespace: immich
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: immich-pg }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: cnpg-system }
+      ports:
+        - port: 8000

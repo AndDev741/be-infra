@@ -1,0 +1,14 @@
+# Immich, the photo library behind bePresent. Tailnet only (ingress.yaml).
+# Originals on the HDD at /srv/media/immich, everything rebuildable on the SSD.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - network-policy.yaml
+  - storage.yaml
+  - postgres.yaml
+  - valkey.yaml
+  - machine-learning.yaml
+  - server.yaml
+  - ingress.yaml

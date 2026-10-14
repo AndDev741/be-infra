@@ -1,0 +1,9 @@
+# Applied by its own Flux Kustomization (clusters/beyou-server/tailscale.yaml),
+# not by platform/, so a tailnet problem never holds back the other apps.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - secrets/operator-oauth.sops.yaml
+  - release.yaml
