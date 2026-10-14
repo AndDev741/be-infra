@@ -9,21 +9,21 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: beconscient-frontend }
+    matchLabels: {app: beconscient-frontend}
   template:
     metadata:
-      labels: { app: beconscient-frontend }
+      labels: {app: beconscient-frontend}
     spec:
       containers:
         - name: nginx
-          image: ghcr.io/anddev741/beconscient-frontend:latest@sha256:ddb35e926e0ef03f16bd936df8db414481c9d2767b875660b3f166402ed1b57f # {"$imagepolicy": "beconscient:beconscient-frontend"}
+          image: ghcr.io/anddev741/beconscient-frontend:latest@sha256:4b2d46e714532bbadfc67e0fe5dd88e76b7b4d6f27fa5dde72ae067f39363bf2 # {"$imagepolicy": "beconscient:beconscient-frontend"}
           ports:
             - containerPort: 8080
           resources:
-            requests: { cpu: 20m, memory: 16Mi }
-            limits: { memory: 64Mi }
+            requests: {cpu: 20m, memory: 16Mi}
+            limits: {memory: 64Mi}
           readinessProbe:
-            httpGet: { path: /healthz, port: 8080 }
+            httpGet: {path: /healthz, port: 8080}
             periodSeconds: 10
 ---
 apiVersion: v1
@@ -33,7 +33,7 @@ metadata:
   namespace: beconscient
 spec:
   type: ClusterIP
-  selector: { app: beconscient-frontend }
+  selector: {app: beconscient-frontend}
   ports:
     - port: 80
       targetPort: 8080
