@@ -7,6 +7,9 @@
 # cluster. Every five minutes this job looks at both queues and the node's
 # MemAvailable (pods see the host's /proc/meminfo) and:
 #   - pauses both while MemAvailable is under STOP_BELOW_MB;
+#   - pauses both while Immich still has non-ML work (metadata, thumbnails,
+#     video conversion), so a big import or a day of phone uploads is
+#     processed first and ML never competes with it for memory;
 #   - keeps the unpaused queue running while it still has work;
 #   - when that queue runs dry, pauses it and starts nothing in the same run,
 #     so its model (MODEL_TTL 60s) is unloaded before the next one loads;
@@ -25,6 +28,7 @@ data:
     URL = os.environ["IMMICH_URL"].rstrip("/") + "/api"
     KEY = os.environ["IMMICH_API_KEY"]
     ORDER = ["faceDetection", "smartSearch"]
+    FIRST = ["metadataExtraction", "thumbnailGeneration", "videoConversion"]
     START = int(os.environ["START_ABOVE_MB"])
     STOP = int(os.environ["STOP_BELOW_MB"])
 
@@ -50,13 +54,15 @@ data:
         print(("pause " if paused else "start ") + name)
 
 
-    queues = {q["name"]: q for q in api("GET", "/queues") if q["name"] in ORDER}
-    work = {n: sum(queues[n]["statistics"][k] for k in ("active", "waiting", "delayed")) for n in ORDER}
+    queues = {q["name"]: q for q in api("GET", "/queues") if q["name"] in ORDER + FIRST}
+    # A paused queue lists its jobs under "paused", not "waiting".
+    work = {n: sum(queues[n]["statistics"][k] for k in ("active", "waiting", "delayed", "paused")) for n in queues}
+    first = sum(work[n] for n in FIRST)
     running = [n for n in ORDER if not queues[n]["isPaused"]]
     mem = available_mb()
     print("available %d MB, work %s, running %s" % (mem, work, running))
 
-    if mem < STOP:
+    if mem < STOP or first:
         keep = None
     else:
         keep = next((n for n in running if work[n] > 0), None)
