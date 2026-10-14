@@ -1,0 +1,91 @@
+# Immich server: API, web app and the background jobs (thumbnails, metadata,
+# video) in one process. Pinned by digest and updated by hand: read the
+# release notes first, Immich's API and database change between versions.
+#
+# Runs as uid 1000 (andre on the host), so files on /srv/media/immich stay
+# readable and writable from the host too.
+#
+# Settings that live in Immich's database are set once in Administration >
+# Settings before the first import (README.md, "immich"): job concurrency 1,
+# OCR off, storage template on.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-server
+  namespace: immich
+spec:
+  replicas: 1
+  # One writer for the library and the thumbnails.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: immich-server }
+  template:
+    metadata:
+      labels: { app: immich-server }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        # Never chown the whole library on start, only when the root differs.
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: server
+          image: ghcr.io/immich-app/immich-server:v3.3.1@sha256:db996e352359771c6a3db121a0ed8761516b22f727fc092a0f46dcfef82c1bc1
+          env:
+            - name: DB_URL
+              valueFrom:
+                secretKeyRef: { name: immich-pg-app, key: uri }
+            - { name: REDIS_HOSTNAME, value: immich-valkey }
+            - { name: IMMICH_MACHINE_LEARNING_URL, value: "http://immich-machine-learning:3003" }
+            - { name: TZ, value: Europe/Lisbon }
+          ports:
+            - name: http
+              containerPort: 2283
+          volumeMounts:
+            - name: library
+              mountPath: /data
+            - name: thumbs
+              mountPath: /data/thumbs
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          # The first start runs migrations and loads the reverse-geocoding
+          # data, which takes minutes on this CPU.
+          startupProbe:
+            httpGet: { path: /api/server/ping, port: http }
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /api/server/ping, port: http }
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /api/server/ping, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { memory: 1280Mi }
+      volumes:
+        - name: library
+          persistentVolumeClaim:
+            claimName: immich-library
+        - name: thumbs
+          persistentVolumeClaim:
+            claimName: immich-thumbs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-server
+  namespace: immich
+spec:
+  selector: { app: immich-server }
+  ports:
+    - name: http
+      port: 2283
+      targetPort: http

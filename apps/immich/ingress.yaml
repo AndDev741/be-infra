@@ -1,0 +1,18 @@
+# Tailnet only: the Tailscale operator (platform/tailscale) gives this Ingress
+# its own proxy and device, https://immich.tail2f18c7.ts.net, with a Let's
+# Encrypt certificate. There is no beyouweb.com hostname and no Traefik route,
+# so the library is unreachable from the internet and from the LAN's
+# NodePort 30000. No upload size cap either, unlike the tunnel's 100 MB.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: immich
+  namespace: immich
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: immich-server
+      port: { name: http }
+  tls:
+    - hosts: [immich]

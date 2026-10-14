@@ -13,7 +13,7 @@ GitOps for `beyou-server`, a single-node k3s cluster where each app runs fenced 
 
 </div>
 
-Every workload on the node is described here. That covers the beyou, befree and beconscient apps, GlitchTip, OmniRoute, the shared Postgres, the ingress and the monitoring stack. Flux watches `main` and applies it, so git always shows what is running. Nothing runs in Docker on the node any more.
+Every workload on the node is described here. That covers the beyou, befree and beconscient apps, GlitchTip, OmniRoute, Immich, the shared Postgres, the ingress and the monitoring stack. Flux watches `main` and applies it, so git always shows what is running. Nothing runs in Docker on the node any more.
 
 > [!NOTE]
 > This repository is public. Every Secret in it is encrypted with SOPS; read [Secrets](#secrets) before adding one.
@@ -35,9 +35,14 @@ flowchart LR
     befree --> pg
     beconscient --> pg
     glitchtip --> pg
+    tailnet((Tailnet)) --> tsproxy["Tailscale proxy<br/>ns: tailscale"]
+    tsproxy --> immich["Immich<br/>ns: immich"]
+    immich --> ipg[("Immich Postgres<br/>VectorChord")]
 ```
 
 The Cloudflare Tunnel on the host sends every hostname to NodePort 30000, and Traefik routes on the Host header to each app's Ingress. k3s ships its own Traefik, but it is disabled on this node (`--disable traefik`), so the one in `platform/traefik/` is the only ingress controller. No app has a NodePort.
+
+Private apps skip all of that. An Ingress with `ingressClassName: tailscale` gets its own proxy pod from the Tailscale operator and its own name on the tailnet, with a Let's Encrypt certificate. Those apps have no beyouweb.com hostname, so they are unreachable through the tunnel, from the internet and from the LAN.
 
 | Namespace | What runs there | Hostnames | Deployed by |
 |---|---|---|---|
@@ -46,11 +51,13 @@ The Cloudflare Tunnel on the host sends every hostname to NodePort 30000, and Tr
 | `beconscient` | nginx + backend, nightly backup of its database and befree's | beconscient.beyouweb.com | Image automation |
 | `glitchtip` | GlitchTip 6 + Valkey | mnt.beyouweb.com | Pinned digest, by hand |
 | `omniroute` | OmniRoute + Redis | omniroute.beyouweb.com | Pinned digest, by hand |
+| `immich` | Immich server and machine learning, Valkey, its own Postgres with VectorChord | immich.tail2f18c7.ts.net (tailnet only) | Pinned digest, by hand |
 | `data` | Postgres 17, one database and role per app | | CloudNativePG |
 | `monitoring` | Prometheus, Grafana, Loki, Alloy | obs.beyouweb.com | Helm and manifests, pinned versions |
 | `headlamp` | Headlamp with the Flux plugin | headlamp.beyouweb.com | Helm, pinned chart |
 | `ingress` | Traefik | | Helm, pinned chart |
 | `cnpg-system` | The CloudNativePG operator | | Helm, pinned chart |
+| `tailscale` | The Tailscale operator and one proxy per tailnet Ingress | | Helm, pinned chart |
 
 ### How Flux applies it
 
@@ -65,6 +72,8 @@ The Cloudflare Tunnel on the host sends every hostname to NodePort 30000, and Tr
 | `befree`, `beconscient` | `apps/<app>/` | `platform`, `data` |
 | `beyou`, `glitchtip` | `apps/<app>/` | `platform`, `data`, `monitoring` |
 | `omniroute` | `apps/omniroute/` | `platform` |
+| `tailscale` | `platform/tailscale/` | |
+| `immich` | `apps/immich/` | `platform` |
 
 ### Repository layout
 
@@ -75,6 +84,7 @@ The Cloudflare Tunnel on the host sends every hostname to NodePort 30000, and Tr
 | `platform/traefik/` | The ingress controller |
 | `platform/cnpg/` | The CloudNativePG operator, which runs the shared Postgres |
 | `platform/headlamp/` | Web UI for the cluster |
+| `platform/tailscale/` | The Tailscale operator, the way into the tailnet-only apps (its own Kustomization) |
 | `platform/monitoring/` | Prometheus, Grafana, Loki, Alloy, alert rules and dashboards |
 | `platform/monitoring/targets/` | Scrape targets for platform pieces outside the `monitoring` namespace |
 | `data/` | The shared Postgres: one cluster, a database and a role per app |
@@ -252,6 +262,24 @@ OmniRoute is the OpenAI-compatible gateway the beyou backend uses for its generi
 
 > [!CAUTION]
 > `STORAGE_ENCRYPTION_KEY` and `API_KEY_SECRET` in OmniRoute's Secret are what make the stored provider keys readable. Never regenerate them.
+
+### immich
+
+Immich is the photo library behind bePresent, at https://immich.tail2f18c7.ts.net and only on the tailnet. The originals live on the 500 GB HDD at `/srv/media/immich`: ext4, `LABEL=media`, mounted on `/srv/media` by the host's fstab. They sit on a static volume with `Retain`, so no delete in the cluster ever removes a photo. Thumbnails, the ML models and Immich's Postgres are on the SSD.
+
+Its Postgres is a separate CloudNativePG cluster, `immich-pg`, because Immich needs VectorChord and the shared one doesn't ship it. The `immich` role owns its database without being a superuser, so a vchord upgrade needs the statements in the header of `apps/immich/postgres.yaml`. Server and ML are pinned by digest: read the release notes, then move both digests together.
+
+First install:
+
+1. On the host, create the library folder for uid 1000: `sudo install -d -o 1000 -g 1000 /srv/media/immich`.
+2. In the Tailscale admin console:
+   - DNS: MagicDNS and HTTPS certificates on.
+   - Access controls: `"tagOwners": {"tag:k8s-operator": ["autogroup:admin"], "tag:k8s": ["tag:k8s-operator"]}`.
+   - Settings, Trust credentials: an OAuth client with write on Devices Core, Auth Keys and Services, tagged `tag:k8s-operator`. Then run `scripts/create-tailscale-operator-secret.sh`, which asks for its id and secret and writes `platform/tailscale/secrets/operator-oauth.sops.yaml`.
+3. Open https://immich.tail2f18c7.ts.net, create the admin account, and in Administration, Settings, before the first import:
+   - Jobs: concurrency 1 for every queue. The i3 has four threads and the other apps need some.
+   - Machine learning: OCR off. Smaller models (buffalo_s, RN50) if the ML pod gets OOM-killed.
+   - Storage template: on, so originals land in year and month folders that stay readable without Immich.
 
 ## Bootstrapping a new cluster
 
