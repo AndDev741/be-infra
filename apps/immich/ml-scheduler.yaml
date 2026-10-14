@@ -13,7 +13,8 @@
 #   - keeps the unpaused queue running while it still has work;
 #   - when that queue runs dry, pauses it and starts nothing in the same run,
 #     so its model (MODEL_TTL 60s) is unloaded before the next one loads;
-#   - starts a queue with work, faces first, only with START_ABOVE_MB free.
+#   - starts the queue with the most pending work (so a steady trickle of
+#     phone uploads can't starve the other one), only with START_ABOVE_MB free.
 # Its API key belongs to the admin but holds only queue.read and queue.update
 # (scripts/create-immich-ml-scheduler-secret.sh).
 apiVersion: v1
@@ -66,8 +67,8 @@ data:
         keep = None
     else:
         keep = next((n for n in running if work[n] > 0), None)
-        if keep is None and not running and mem >= START:
-            keep = next((n for n in ORDER if work[n] > 0), None)
+        if keep is None and not running and mem >= START and any(work[n] for n in ORDER):
+            keep = max(ORDER, key=lambda n: work[n])
     for n in ORDER:
         if queues[n]["isPaused"] != (n != keep):
             pause(n, n != keep)
