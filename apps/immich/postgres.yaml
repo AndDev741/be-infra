@@ -24,9 +24,12 @@ spec:
   storage:
     storageClass: local-path
     size: 5Gi
+  # On the first start Immich bulk-loads its reverse-geocoding data (hundreds
+  # of thousands of rows plus indexes). At 512Mi that got Postgres OOM-killed;
+  # afterwards it idles far below this.
   resources:
     requests: { cpu: 50m, memory: 192Mi }
-    limits: { memory: 512Mi }
+    limits: { memory: 1Gi }
   postgresql:
     shared_preload_libraries: ["vchord.so"]
     parameters:
