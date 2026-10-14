@@ -281,6 +281,8 @@ First install:
    - Machine learning: OCR off. Smaller models (buffalo_s, RN50) if the ML pod gets OOM-killed.
    - Storage template: on, so originals land in year and month folders that stay readable without Immich.
 
+Machine learning runs one model at a time. Immich would load the face and smart-search models together, about 1.5 GB, and on 2026-10-14 that pushed the node into swap and restarted pods across the cluster. `apps/immich/ml-scheduler.yaml` runs every five minutes, keeps at most one of the two queues unpaused and pauses both while the node has under 500 MB available. Its API key (queue permissions only) comes from `scripts/create-immich-ml-scheduler-secret.sh`. To see what it decided: `kubectl -n immich logs job/<latest immich-ml-scheduler job>`.
+
 ## Bootstrapping a new cluster
 
 The node needs k3s installed with `--disable traefik` and a Cloudflare Tunnel sending each hostname to NodePort 30000. Then:

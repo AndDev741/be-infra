@@ -1,5 +1,5 @@
 # Immich server, machine learning, Valkey and Immich's own Postgres. The limits
-# add up to about 4.3 Gi, more than the node has free, on purpose: the server
+# add up to about 4.1 Gi, more than the node has free, on purpose: the server
 # and ML peak at different times, and both sit far below their limits between
 # imports. The requests are what the node reserves.
 apiVersion: v1
@@ -13,8 +13,8 @@ spec:
     requests.memory: 1280Mi
     # Room for the bootstrap job next to the four pods.
     limits.memory: 6Gi
-    # The four workloads plus CloudNativePG's bootstrap job.
-    pods: "6"
+    # The four workloads, the ML scheduler's run and CloudNativePG's jobs.
+    pods: "7"
     # Library, thumbs, ML cache, Postgres.
     persistentvolumeclaims: "4"
     services.nodeports: "0"

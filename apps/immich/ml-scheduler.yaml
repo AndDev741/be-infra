@@ -1,0 +1,121 @@
+# Keeps Immich's machine learning to one model at a time, and to none while
+# the node is short of memory.
+#
+# Immich runs face detection and smart search as two queues, so on its own it
+# loads both models together (about 1.5 GB). On 2026-10-14 that, next to the
+# Immich server, pushed the node into swap and restarted pods across the
+# cluster. Every five minutes this job looks at both queues and the node's
+# MemAvailable (pods see the host's /proc/meminfo) and:
+#   - pauses both while MemAvailable is under STOP_BELOW_MB;
+#   - keeps the unpaused queue running while it still has work;
+#   - when that queue runs dry, pauses it and starts nothing in the same run,
+#     so its model (MODEL_TTL 60s) is unloaded before the next one loads;
+#   - starts a queue with work, faces first, only with START_ABOVE_MB free.
+# Its API key belongs to the admin but holds only queue.read and queue.update
+# (scripts/create-immich-ml-scheduler-secret.sh).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-ml-scheduler
+  namespace: immich
+data:
+  scheduler.py: |
+    import json, os, urllib.request
+
+    URL = os.environ["IMMICH_URL"].rstrip("/") + "/api"
+    KEY = os.environ["IMMICH_API_KEY"]
+    ORDER = ["faceDetection", "smartSearch"]
+    START = int(os.environ["START_ABOVE_MB"])
+    STOP = int(os.environ["STOP_BELOW_MB"])
+
+
+    def api(method, path, body=None):
+        req = urllib.request.Request(
+            URL + path, method=method,
+            data=None if body is None else json.dumps(body).encode(),
+            headers={"x-api-key": KEY, "content-type": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read()
+        return json.loads(data) if data else None
+
+
+    def available_mb():
+        for line in open("/proc/meminfo"):
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) // 1024
+
+
+    def pause(name, paused):
+        api("PUT", "/queues/" + name, {"isPaused": paused})
+        print(("pause " if paused else "start ") + name)
+
+
+    queues = {q["name"]: q for q in api("GET", "/queues") if q["name"] in ORDER}
+    work = {n: sum(queues[n]["statistics"][k] for k in ("active", "waiting", "delayed")) for n in ORDER}
+    running = [n for n in ORDER if not queues[n]["isPaused"]]
+    mem = available_mb()
+    print("available %d MB, work %s, running %s" % (mem, work, running))
+
+    if mem < STOP:
+        keep = None
+    else:
+        keep = next((n for n in running if work[n] > 0), None)
+        if keep is None and not running and mem >= START:
+            keep = next((n for n in ORDER if work[n] > 0), None)
+    for n in ORDER:
+        if queues[n]["isPaused"] != (n != keep):
+            pause(n, n != keep)
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: immich-ml-scheduler
+  namespace: immich
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 120
+      ttlSecondsAfterFinished: 600
+      template:
+        metadata:
+          labels: { app: immich-ml-scheduler }
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+          containers:
+            - name: scheduler
+              image: python:3.12-alpine@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4
+              command: [python, -u, /app/scheduler.py]
+              env:
+                - { name: IMMICH_URL, value: "http://immich-server:2283" }
+                - name: IMMICH_API_KEY
+                  valueFrom:
+                    secretKeyRef: { name: immich-ml-scheduler, key: api-key }
+                # Loading one model takes about 1 GB; the node swaps hard
+                # well before MemAvailable reaches zero.
+                - { name: START_ABOVE_MB, value: "1300" }
+                - { name: STOP_BELOW_MB, value: "500" }
+              volumeMounts:
+                - name: script
+                  mountPath: /app
+                  readOnly: true
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              resources:
+                requests: { cpu: 10m, memory: 32Mi }
+                limits: { memory: 64Mi }
+          volumes:
+            - name: script
+              configMap:
+                name: immich-ml-scheduler

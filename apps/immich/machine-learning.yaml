@@ -3,9 +3,10 @@
 # x86-64-v2, which the i3-3120M has (no AVX2 needed).
 #
 # Memory is the constraint. Models load on the first request and unload after
-# MODEL_TTL seconds idle, so the pod sits near 200 MB between jobs. With CLIP
-# ViT-B-32 and buffalo_l loaded together it peaks around 1.5 GB. If it gets
-# OOM-killed, pick smaller models in Immich's settings (buffalo_s, RN50).
+# MODEL_TTL seconds idle, so the pod sits near 200 MB between jobs. CLIP
+# ViT-B-32 and buffalo_l together need about 1.5 GB, which this node can't
+# spare: ml-scheduler.yaml keeps only one of the two queues running, and the
+# limit below kills only this pod if a model still doesn't fit.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,7 +33,8 @@ spec:
           image: ghcr.io/immich-app/immich-machine-learning:v3.3.1@sha256:513c831cfb010ad319341a0c86b42c575a0d5b688d3e8cae346ee624074a58ed
           env:
             - { name: MACHINE_LEARNING_CACHE_FOLDER, value: /cache }
-            - { name: MACHINE_LEARNING_MODEL_TTL, value: "300" }
+            # Unload quickly, so the scheduler can switch models without overlap.
+            - { name: MACHINE_LEARNING_MODEL_TTL, value: "60" }
             # Each worker loads its own copy of every model.
             - { name: MACHINE_LEARNING_WORKERS, value: "1" }
             # Two of the four threads, so the other apps stay responsive.
@@ -66,7 +68,7 @@ spec:
             timeoutSeconds: 10
           resources:
             requests: { cpu: 100m, memory: 256Mi }
-            limits: { memory: 1536Mi }
+            limits: { memory: 1280Mi }
       volumes:
         - name: cache
           persistentVolumeClaim:

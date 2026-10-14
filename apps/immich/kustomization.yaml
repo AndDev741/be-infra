@@ -11,4 +11,6 @@ resources:
   - valkey.yaml
   - machine-learning.yaml
   - server.yaml
+  - secrets/immich-ml-scheduler.sops.yaml
+  - ml-scheduler.yaml
   - ingress.yaml
