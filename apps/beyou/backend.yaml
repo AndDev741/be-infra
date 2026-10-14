@@ -51,17 +51,31 @@ spec:
             - {name: UPLOAD_DIR, value: /data/uploads}
             - {name: MANAGEMENT_PORT, value: "9091"}
             - {name: MANAGEMENT_ADDRESS, value: 0.0.0.0}
-            # The heap follows the container limit (55% of it, ~700Mi), and
-            # metaspace is capped so it cannot grow into the limit unnoticed.
-            # Non-heap (metaspace, code cache, threads) takes ~260Mi on top: at
-            # 70% of 1Gi the process sat at ~980Mi RSS, a step from an OOM kill.
-            # G1 is named explicitly because under 1792M the JVM picks SerialGC,
-            # whose old generation is only emptied by a full GC: objects promoted
-            # by each notebook AI call piled up to ~430Mi over a ~100Mi live set.
-            # G1 marks the old generation concurrently, and the periodic cycle
-            # (every 5 minutes without a GC) hands memory back while idle.
+            # Memory budget, measured 2026-10-14 at ~980Mi RSS: heap ~320Mi in
+            # use for a live set of 80-120Mi, metaspace ~200Mi (33k classes),
+            # code cache ~45Mi, and ~420Mi of native memory the JVM does not
+            # account for at all.
+            #
+            # glibc hands each thread its own malloc arena (up to 8 per core),
+            # and in a container that is the usual home of untracked RSS; two
+            # arenas are plenty at this traffic.
+            - {name: MALLOC_ARENA_MAX, value: "2"}
+            # The heap is sized from the live set (3x its peak), not from the
+            # limit. G1 is named explicitly because under 1792M the JVM picks
+            # SerialGC, whose old generation is only emptied by a full GC:
+            # objects promoted by each notebook AI call piled up to ~430Mi over
+            # a ~100Mi live set. G1 marks the old generation concurrently, and
+            # the periodic cycle (every 5 minutes without a GC) hands memory
+            # back while idle. C1 only (TieredStopAtLevel=1) trades some peak
+            # throughput for a smaller code cache and far less compiler memory.
+            # Native memory tracking costs a few MB and lets
+            # `jcmd 1 VM.native_memory summary` explain the rest.
             - name: JAVA_TOOL_OPTIONS
-              value: -XX:MaxRAMPercentage=55 -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -XX:G1PeriodicGCInterval=300000
+              value: >-
+                -Xms64m -Xmx384m -XX:MaxMetaspaceSize=256m
+                -XX:+UseG1GC -XX:G1PeriodicGCInterval=300000
+                -XX:ReservedCodeCacheSize=64m -XX:TieredStopAtLevel=1
+                -XX:NativeMemoryTracking=summary
           ports:
             - {name: http, containerPort: 8099}
             - {name: metrics, containerPort: 9091}
