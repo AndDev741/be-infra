@@ -58,19 +58,25 @@ spec:
             httpGet: { path: /api/server/ping, port: http }
             periodSeconds: 10
             failureThreshold: 60
+          # Thumbnail and video jobs keep this pod busy for hours after a big
+          # import, and a slow ping then is not a hung server.
           livenessProbe:
             httpGet: { path: /api/server/ping, port: http }
             periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
+            timeoutSeconds: 10
+            failureThreshold: 5
           readinessProbe:
             httpGet: { path: /api/server/ping, port: http }
             periodSeconds: 10
             timeoutSeconds: 5
           resources:
             # Measured 1.1Gi during the first start's geodata import.
+            # libvips and ffmpeg take every core they see. Two cores leave the
+            # other two for k3s and the rest of the node; without the cap a
+            # 10k-file import starved the API server and restarted half the
+            # cluster's pods.
             requests: { cpu: 100m, memory: 384Mi }
-            limits: { memory: 1536Mi }
+            limits: { cpu: "2", memory: 1536Mi }
       volumes:
         - name: library
           persistentVolumeClaim:
