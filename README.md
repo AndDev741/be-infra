@@ -171,8 +171,8 @@ One CloudNativePG cluster, `pg` in the `data` namespace (`data/postgres.yaml`). 
 |---|---|---|
 | `beyou` | `beyou` | `beyou_readonly` (Grafana's product dashboard) |
 | `glitchtip` | `glitchtip` | |
-| `befree` | `befree` | `beconscient_backup` (SELECT, for the nightly dump) |
-| `beconscient` | `beconscient` | `beconscient_backup` (SELECT, for the nightly dump) |
+| `befree` | `befree` | `beconscient_backup` (SELECT, for the nightly dump), `befree_readonly` (Grafana's beFree dashboard) |
+| `beconscient` | `beconscient` | `beconscient_backup` (SELECT, for the nightly dump), `beconscient_readonly` (Grafana's beConscient dashboard) |
 
 ### Grants
 
@@ -190,7 +190,30 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO beconscient_backup;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO beconscient_backup;
 ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT SELECT ON TABLES TO beconscient_backup;
 ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT SELECT ON SEQUENCES TO beconscient_backup;
+
+-- in befree, as befree: the dashboard's tables only. Not chat_memory or
+-- app_users, and not transactions.rawinput (the message as typed).
+GRANT USAGE ON SCHEMA public TO befree_readonly;
+GRANT SELECT ON categories, budgets, goals, goal_contributions, inbound_messages,
+  app_settings, month_starts TO befree_readonly;
+GRANT SELECT (id, amount, type, currency, occurredon, description, category_id,
+  source, external_id, createdat, goal_id) ON transactions TO befree_readonly;
+
+-- in beconscient, as beconscient: no credentials (app_users, pairing_codes,
+-- installations' hash and fingerprint) and no quarantined payloads.
+GRANT USAGE ON SCHEMA public TO beconscient_readonly;
+GRANT SELECT ON devices, raw_events, batch_log, segments, raw_intervals, unlocks,
+  blocks, dirty_blocks, derivation_state, categories, subject_mappings,
+  window_settings, non_workdays, computer_labels, sensor_coverage,
+  device_counters, interval_conflicts, validation_inputs TO beconscient_readonly;
+GRANT SELECT (id, device_id, client_name, client_version, created_at,
+  last_seen_at, revoked_at, clone_suspected, last_seq, last_tz)
+  ON installations TO beconscient_readonly;
+GRANT SELECT (id, device_id, installation_id, event_id, type, ts, reason,
+  received_at) ON quarantine TO beconscient_readonly;
 ```
+
+These two are per table, so a table added later needs its own grant.
 
 No backup role gets `pg_read_all_data`. In a shared cluster that role would reach every app's database.
 

@@ -10,4 +10,6 @@ resources:
   - secrets/befree-db-owner.sops.yaml
   - secrets/beconscient-db-owner.sops.yaml
   - secrets/beconscient-db-backup.sops.yaml
+  - secrets/befree-db-readonly.sops.yaml
+  - secrets/beconscient-db-readonly.sops.yaml
   - postgres.yaml

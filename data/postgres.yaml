@@ -52,6 +52,19 @@ spec:
         ensure: present
         login: true
         passwordSecret: { name: beconscient-db-owner }
+      # befree_readonly and beconscient_readonly: Grafana's dashboards for
+      # those apps. SELECT on the listed tables (and columns) only, not on the
+      # whole database (README.md, "Grants").
+      - name: befree_readonly
+        ensure: present
+        login: true
+        connectionLimit: 5
+        passwordSecret: { name: befree-db-readonly }
+      - name: beconscient_readonly
+        ensure: present
+        login: true
+        connectionLimit: 5
+        passwordSecret: { name: beconscient-db-readonly }
       # beconscient_backup: the nightly dump of the befree and beconscient
       # databases (apps/beconscient/backup.yaml). Granted SELECT on those two
       # only (README.md, "befree and beconscient"), not pg_read_all_data, which

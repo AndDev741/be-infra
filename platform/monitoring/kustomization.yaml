@@ -8,6 +8,8 @@ resources:
   - secrets/grafana-smtp.sops.yaml
   - secrets/grafana-beyou-db.sops.yaml
   - secrets/grafana-immich-db.sops.yaml
+  - secrets/grafana-befree-db.sops.yaml
+  - secrets/grafana-beconscient-db.sops.yaml
   - kube-prometheus-stack.yaml
   - loki.yaml
   - alloy.yaml

@@ -226,6 +226,8 @@ spec:
         - name: grafana-smtp
         - name: grafana-beyou-db
         - name: grafana-immich-db
+        - name: grafana-befree-db
+        - name: grafana-beconscient-db
       alerting:
         contactpoints.yaml:
           apiVersion: 1
@@ -471,6 +473,39 @@ spec:
             maxIdleConns: 1
           secureJsonData:
             password: $IMMICH_DB_PASSWORD
+        # befree and beconscient, read-only, for their dashboards. Each role can
+        # SELECT only the tables (and columns) its dashboard reads
+        # (README.md, "Grants").
+        - name: beFree Postgres
+          uid: befree-postgres
+          type: grafana-postgresql-datasource
+          url: pg-rw.data.svc:5432
+          user: befree_readonly
+          access: proxy
+          editable: false
+          jsonData:
+            database: befree
+            sslmode: require
+            postgresVersion: 1700
+            maxOpenConns: 2
+            maxIdleConns: 1
+          secureJsonData:
+            password: $BEFREE_DB_PASSWORD
+        - name: beConscient Postgres
+          uid: beconscient-postgres
+          type: grafana-postgresql-datasource
+          url: pg-rw.data.svc:5432
+          user: beconscient_readonly
+          access: proxy
+          editable: false
+          jsonData:
+            database: beconscient
+            sslmode: require
+            postgresVersion: 1700
+            maxOpenConns: 2
+            maxIdleConns: 1
+          secureJsonData:
+            password: $BECONSCIENT_DB_PASSWORD
       # The dashboard and datasource sidecars (~80Mi of Python each) run once,
       # as init containers, instead of watching for changes all day. A new or
       # changed dashboard ConfigMap therefore shows up after a Grafana restart:
