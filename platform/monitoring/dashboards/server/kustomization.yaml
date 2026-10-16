@@ -1,0 +1,15 @@
+# The server overview: the host and the k3s node at a glance, and how CPU and
+# memory split across namespaces and pods.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: beyou-server
+configMapGenerator:
+  - name: dashboards-server
+    files:
+      - beyou-server-overview.json

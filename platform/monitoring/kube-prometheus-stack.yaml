@@ -69,13 +69,22 @@ spec:
           - action: keep
             sourceLabels: [__name__]
             regex: container_(cpu_usage_seconds_total|cpu_cfs_periods_total|cpu_cfs_throttled_periods_total|memory_working_set_bytes|memory_rss|memory_cache|oom_events_total|network_(receive|transmit)_bytes_total|fs_(reads|writes)_bytes_total)
-          # From the chart's defaults: CNI interfaces, and cgroups with no pod.
+          # From the chart's defaults: CNI interfaces, and cgroups with no pod,
+          # except k3s.service (API server, kubelet, containerd: ~1.8Gi that
+          # the server overview shows apart from the rest of the host).
           - action: drop
             sourceLabels: [__name__, interface]
             regex: container_network_.*;(cali|cilium|cni|lxc|nodelocaldns|tunl|flannel|veth).*
+          - action: replace
+            sourceLabels: [id]
+            regex: /system\.slice/k3s\.service
+            targetLabel: __tmp_keep
+            replacement: "1"
           - action: drop
-            sourceLabels: [id, pod]
-            regex: .+;
+            sourceLabels: [__tmp_keep, id, pod]
+            regex: ;.+;
+          - action: labeldrop
+            regex: __tmp_keep
         # Probe latency per container, in buckets; prober_probe_total covers
         # whether the probes pass.
         probesMetricRelabelings:

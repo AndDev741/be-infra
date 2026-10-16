@@ -12,5 +12,6 @@ resources:
   - loki.yaml
   - alloy.yaml
   # Moves to apps/beyou once beyou runs in the cluster (roadmap phase 2).
+  - dashboards/server
   - dashboards/beyou
   - dashboards/bepresent
