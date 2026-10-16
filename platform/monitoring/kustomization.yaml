@@ -17,3 +17,5 @@ resources:
   - dashboards/server
   - dashboards/beyou
   - dashboards/bepresent
+  - dashboards/beconscient
+  - dashboards/befree

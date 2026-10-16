@@ -1,0 +1,16 @@
+# The beConscient dashboard: Screen time across phone and computer, and the pipeline that collects it.
+# Product data through the read-only "beConscient Postgres" datasource; requests
+# and errors from the app's nginx and backend logs; pods from Prometheus.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: beConscient
+configMapGenerator:
+  - name: dashboards-beconscient
+    files:
+      - beconscient.json

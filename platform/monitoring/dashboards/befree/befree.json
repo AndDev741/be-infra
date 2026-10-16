@@ -1,0 +1,2511 @@
+{
+  "uid": "befree",
+  "title": "beFree",
+  "description": "Money in and out per budgeting cycle, budgets and goals, how entries arrive (app chat, WhatsApp, form) and the pods behind it.",
+  "tags": [
+    "befree",
+    "product"
+  ],
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Open beFree",
+      "type": "link",
+      "url": "https://befree.beyouweb.com",
+      "targetBlank": true,
+      "icon": "external link"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "This month (cycle)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Cycle",
+      "description": "The budgeting month in progress. It starts on your configured start day, so it does not follow the calendar month.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1)\nSELECT to_char(label, 'Mon YYYY') || '  ·  ' || to_char(start, 'DD Mon') || ' – ' || to_char(stop - 1, 'DD Mon') AS value FROM cur"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "string",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Spent",
+      "description": "Expenses this cycle, not counting those paid out of a savings goal.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1)\nSELECT coalesce(sum(t.amount), 0) AS value FROM transactions t, cur\nWHERE t.type = 'EXPENSE' AND t.goal_id IS NULL AND t.occurredon >= cur.start AND t.occurredon < cur.stop"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Income",
+      "description": "Income this cycle.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1)\nSELECT coalesce(sum(t.amount), 0) AS value FROM transactions t, cur\nWHERE t.type = 'INCOME' AND t.occurredon >= cur.start AND t.occurredon < cur.stop"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Balance",
+      "description": "Income minus expenses this cycle.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1)\nSELECT coalesce(sum(CASE WHEN t.type = 'INCOME' THEN t.amount WHEN t.type = 'EXPENSE' AND t.goal_id IS NULL THEN -t.amount ELSE 0 END), 0) AS value\nFROM transactions t, cur WHERE t.occurredon >= cur.start AND t.occurredon < cur.stop"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Budget left",
+      "description": "Sum of this cycle's budgets minus what was spent in those categories.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1),\nb AS (SELECT b.category_id, b.limit_amount FROM budgets b, cur WHERE b.period = cur.label),\ns AS (SELECT t.category_id, sum(t.amount) AS spent FROM transactions t, cur\n      WHERE t.type = 'EXPENSE' AND t.goal_id IS NULL AND t.occurredon >= cur.start AND t.occurredon < cur.stop GROUP BY 1)\nSELECT CASE WHEN count(*) = 0 THEN NULL ELSE sum(b.limit_amount) - coalesce(sum(s.spent), 0) END AS value\nFROM b LEFT JOIN s USING (category_id)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          },
+          "noValue": "no budgets"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Spent per day",
+      "description": "Average spend per day so far this cycle.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1), today2 AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t)\nSELECT coalesce(sum(t.amount), 0) / greatest((SELECT t FROM today2) - cur.start + 1, 1) AS value\nFROM cur LEFT JOIN transactions t ON t.type = 'EXPENSE' AND t.goal_id IS NULL AND t.occurredon >= cur.start AND t.occurredon <= (SELECT t FROM today2)\nGROUP BY cur.start"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Days left",
+      "description": "Days until the next cycle starts.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 21,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1) SELECT cur.stop - (now() AT TIME ZONE 'Europe/Lisbon')::date AS value FROM cur"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Budgets",
+      "description": "This cycle's budgets against what was spent in each category.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 9,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1),\ns AS (SELECT t.category_id, sum(t.amount) AS spent FROM transactions t, cur\n      WHERE t.type = 'EXPENSE' AND t.goal_id IS NULL AND t.occurredon >= cur.start AND t.occurredon < cur.stop GROUP BY 1)\nSELECT c.name AS \"Category\", b.limit_amount AS \"Budget\", coalesce(s.spent, 0) AS \"Spent\",\n       b.limit_amount - coalesce(s.spent, 0) AS \"Left\", coalesce(s.spent, 0) / nullif(b.limit_amount, 0) AS \"Used\"\nFROM budgets b JOIN cur ON b.period = cur.label JOIN categories c ON c.id = b.category_id\nLEFT JOIN s ON s.category_id = b.category_id ORDER BY 5 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": false,
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Budget"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Spent"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Left"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.8
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Left"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "text",
+                      "value": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "bargauge",
+      "title": "Spend by category",
+      "description": "Expenses this cycle by category, budgeted or not.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 5,
+        "w": 6,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-2, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 1\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1)\nSELECT coalesce(c.name, 'Uncategorized') AS category, sum(t.amount) AS spent\nFROM transactions t JOIN cur ON t.occurredon >= cur.start AND t.occurredon < cur.stop\nLEFT JOIN categories c ON c.id = t.category_id WHERE t.type = 'EXPENSE' AND t.goal_id IS NULL GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "min": 0,
+          "noValue": "none",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "text": {},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "legend": {
+          "showLegend": false
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "This cycle vs the last one",
+      "description": "Cumulative spend by day of the cycle. The last cycle is shifted onto this one's dates so the two lines compare day for day.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 5,
+        "w": 9,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-3, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 2\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1),\nranked AS (SELECT *, row_number() OVER (ORDER BY label DESC) AS k FROM cyc),\ndays AS (\n  SELECT r.k, g::date AS day, (g::date - r.start) AS offs FROM ranked r,\n         generate_series(r.start, least(r.stop - 1, (now() AT TIME ZONE 'Europe/Lisbon')::date), interval '1 day') g\n),\ndaily AS (\n  SELECT days.k, days.offs, coalesce(sum(t.amount), 0) AS amt\n  FROM days LEFT JOIN transactions t ON t.occurredon = days.day AND t.type = 'EXPENSE' AND t.goal_id IS NULL\n  GROUP BY 1, 2\n)\nSELECT ((SELECT start FROM ranked WHERE k = 1) + offs)::timestamp AT TIME ZONE 'Europe/Lisbon' AS time,\n       CASE WHEN k = 1 THEN 'This cycle' ELSE 'Last cycle' END AS metric,\n       sum(amt) OVER (PARTITION BY k ORDER BY offs) AS value\nFROM daily ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0,
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "This cycle"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3274D9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last cycle"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#A0A0A0"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "Month by month",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "type": "barchart",
+      "title": "Income and expenses per cycle",
+      "description": "The last 12 cycles that have any entries.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 10,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-13, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 12\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1)\nSELECT to_char(cyc.label, 'Mon YY') AS cycle,\n       coalesce(sum(t.amount) FILTER (WHERE t.type = 'INCOME'), 0) AS \"Income\",\n       coalesce(sum(t.amount) FILTER (WHERE t.type = 'EXPENSE' AND t.goal_id IS NULL), 0) AS \"Expenses\"\nFROM cyc LEFT JOIN transactions t ON t.occurredon >= cyc.start AND t.occurredon < cyc.stop\nGROUP BY cyc.label HAVING count(t.id) > 0 ORDER BY cyc.label"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "none",
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "gradientMode": "none"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Income"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Expenses"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F2495C"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "vertical",
+        "stacking": "none",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "showValue": "never",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "xField": "cycle"
+      }
+    },
+    {
+      "id": 14,
+      "type": "barchart",
+      "title": "Expenses per cycle, by category",
+      "description": "How each cycle's spending splits across categories.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 15,
+        "w": 14,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \ncfg AS (SELECT coalesce((SELECT month_start_day FROM app_settings LIMIT 1), 1) AS dflt),\ntoday AS (SELECT (now() AT TIME ZONE 'Europe/Lisbon')::date AS t),\nlabels AS (\n  -- The label of the cycle containing today: the month whose start is the latest one <= today.\n  SELECT (date_trunc('month', t) + make_interval(months => k))::date AS label\n  FROM today, generate_series(-13, 1) k\n),\nstarts AS (\n  SELECT l.label,\n         CASE WHEN sd.d = 1 THEN l.label\n              ELSE (l.label - interval '1 month')::date + (least(sd.d, 28) - 1) END AS start\n  FROM labels l\n  CROSS JOIN cfg\n  LEFT JOIN month_starts ms ON ms.period = l.label\n  CROSS JOIN LATERAL (SELECT coalesce(ms.start_day, cfg.dflt) AS d) sd\n),\nspans AS (\n  SELECT label, start, lead(start) OVER (ORDER BY label) AS stop FROM starts\n),\ncyc AS (\n  SELECT label, start, stop FROM spans, today\n  WHERE stop IS NOT NULL AND start <= t ORDER BY label DESC LIMIT 12\n),\ncur AS (SELECT * FROM cyc ORDER BY label DESC LIMIT 1),\nx AS (\n  SELECT cyc.label, coalesce(c.name, 'Uncategorized') AS cat, sum(t.amount) AS amt\n  FROM cyc JOIN transactions t ON t.occurredon >= cyc.start AND t.occurredon < cyc.stop AND t.type = 'EXPENSE' AND t.goal_id IS NULL\n  LEFT JOIN categories c ON c.id = t.category_id GROUP BY 1, 2\n)\nSELECT to_char(label, 'Mon YY') AS cycle, cat, amt FROM x ORDER BY label, cat"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "none",
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "gradientMode": "none"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "stacking": "normal",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "showValue": "never",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "xField": "cycle"
+      },
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "cat",
+            "rowField": "cycle",
+            "valueField": "amt",
+            "emptyValue": "zero"
+          }
+        },
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "cycle\\\\cat",
+            "renamePattern": "cycle"
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Savings goals",
+      "description": "Saved = opening amount + contributions − expenses paid from the goal.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT g.name AS \"Goal\", g.target AS \"Target\",\n       g.initial_amount + coalesce((SELECT sum(amount) FROM goal_contributions gc WHERE gc.goal_id = g.id), 0)\n         - coalesce((SELECT sum(amount) FROM transactions t WHERE t.goal_id = g.id), 0) AS \"Saved\",\n       (g.initial_amount + coalesce((SELECT sum(amount) FROM goal_contributions gc WHERE gc.goal_id = g.id), 0)\n         - coalesce((SELECT sum(amount) FROM transactions t WHERE t.goal_id = g.id), 0)) / nullif(g.target, 0) AS \"Progress\",\n       g.target_date AS \"By\", g.achieved_on AS \"Achieved\"\nFROM goals g ORDER BY g.achieved_on NULLS FIRST, 4 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": false,
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Target"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Saved"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Progress"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Latest entries",
+      "description": "The last 15 entries recorded, newest first.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT t.occurredon AS \"Date\", t.description AS \"Description\", coalesce(c.name, '—') AS \"Category\",\n       CASE WHEN t.type = 'INCOME' THEN t.amount ELSE -t.amount END AS \"Amount\",\n       CASE WHEN t.external_id LIKE 'app-%' THEN 'app chat' WHEN t.external_id LIKE 'wamid%' THEN 'WhatsApp'\n            WHEN t.external_id IS NULL THEN 'form' ELSE lower(t.source) END AS \"Via\",\n       t.createdat AS \"Added\"\nFROM transactions t LEFT JOIN categories c ON c.id = t.category_id\nORDER BY t.createdat DESC LIMIT 15"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": false,
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Amount"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.001
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Added"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "row",
+      "title": "How entries arrive",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Entries recorded, by channel",
+      "description": "Transactions created per day by where they came from: the assistant in the app's chat, a WhatsApp message, or the manual form.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(t.createdat, '1d'),\n       CASE WHEN t.external_id LIKE 'app-%' THEN 'app chat' WHEN t.external_id LIKE 'wamid%' THEN 'WhatsApp'\n            WHEN t.external_id IS NULL THEN 'form' ELSE lower(t.source) END AS metric,\n       count(*) AS value\nFROM transactions t WHERE $__timeFilter(t.createdat) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "app chat"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3274D9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "WhatsApp"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "form"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B877D9"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "WhatsApp messages received",
+      "description": "Messages accepted from the WhatsApp webhook per day, and whether they produced a transaction. 'No entry' is a question or command, or a failure (see the logs below).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "befree-postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 32,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "befree-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(m.received_at, '1d'),\n       count(*) FILTER (WHERE EXISTS (SELECT 1 FROM transactions t WHERE split_part(t.external_id, '#', 1) = m.external_id)) AS \"Recorded something\",\n       count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM transactions t WHERE split_part(t.external_id, '#', 1) = m.external_id)) AS \"No entry\"\nFROM inbound_messages m WHERE $__timeFilter(m.received_at) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Recorded something"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "No entry"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#A0A0A0"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Assistant actions",
+      "description": "Tools the AI assistant called (record a transaction, check a budget, add to a goal...), from the backend log. One message can trigger several.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 32,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (tool) (count_over_time({namespace=\"befree\", container=\"backend\"} |~ \"tool [a-zA-Z]+\\\\(\" | regexp `tool (?P<tool>[a-zA-Z]+)\\(` [$__auto]))",
+          "legendFormat": "{{tool}}",
+          "queryType": "range",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "API calls by endpoint",
+      "description": "Requests per endpoint from the nginx access log (ids and query strings dropped). POST /api/chat is the in-app assistant; /webhooks/whatsapp is Meta delivering messages.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (endpoint) (count_over_time({namespace=\"befree\", container=\"nginx\"} |~ \"\\\"(GET|POST|PUT|PATCH|DELETE) /(api|webhooks)/\" | regexp `\"(?P<method>[A-Z]+) /(?P<path>(api|webhooks)/[a-z]+)` | label_format endpoint=`{{.method}} /{{.path}}` [$__auto]))",
+          "legendFormat": "{{endpoint}}",
+          "queryType": "range",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Assistant and WhatsApp failures",
+      "description": "Things that went wrong turning a message into entries: the LLM call, media (photo, audio, PDF), the reply, or a webhook with a bad signature.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (kind) (count_over_time({namespace=\"befree\", container=\"backend\"} |~ \"Assistant failed|Failed to handle WhatsApp|Unhandled failure processing|recordTransaction failed|Could not (read|transcribe|download)|Failed to send WhatsApp|Rejected WhatsApp webhook\" | regexp `(?P<kind>Assistant failed|Failed to handle WhatsApp|Unhandled failure processing|recordTransaction failed|Could not (read|transcribe|download)|Failed to send WhatsApp|Rejected WhatsApp webhook)` [$__auto]))",
+          "legendFormat": "{{kind}}",
+          "queryType": "range",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": "row",
+      "title": "Resources and errors",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Memory by container",
+      "description": "Working set of each container, with its memory limit dashed. Reaching the limit means an OOM kill.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(pod, container)(container_memory_working_set_bytes{namespace=\"befree\",container!=\"\"})",
+          "legendFormat": "{{container}} ({{pod}})",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(pod, container)(kube_pod_container_resource_limits{namespace=\"befree\",resource=\"memory\"}) and on(pod, container) container_memory_working_set_bytes{namespace=\"befree\",container!=\"\"}",
+          "legendFormat": "limit {{container}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "limit .*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "CPU by container",
+      "description": "Cores used per container.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 49,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(pod, container)(rate(container_cpu_usage_seconds_total{namespace=\"befree\",container!=\"\"}[$__rate_interval]))",
+          "legendFormat": "{{container}} ({{pod}})",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "Requests by status",
+      "description": "API calls through the app's nginx, by HTTP status (static files left out). 5xx means the backend failed or was down.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 49,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (status) (count_over_time({namespace=\"befree\", container=\"nginx\"} |~ \"\\\"(GET|POST|PUT|PATCH|DELETE) /(api|ingest|webhooks)/\" | regexp `\" (?P<status>\\d{3}) ` [$__auto]))",
+          "legendFormat": "{{status}}",
+          "queryType": "range",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "200"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "204"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#96D98D"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "304"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#C8F2C2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "401"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF9830"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "404"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FADE2A"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "500"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F2495C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "502"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#C4162A"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "503"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8F3BB8"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": "stat",
+      "title": "Restarts (7 d)",
+      "description": "Container restarts in this namespace over the last week.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 57,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum(increase(kube_pod_container_status_restarts_total{namespace=\"befree\"}[7d])))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 28,
+      "type": "stat",
+      "title": "OOM kills (7 d)",
+      "description": "Containers killed for going over their memory limit, last week.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 57,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum(increase(container_oom_events_total{namespace=\"befree\"}[7d]))) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 29,
+      "type": "stat",
+      "title": "Database size",
+      "description": "Size of this app's database in the shared Postgres.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 57,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(cnpg_pg_database_size_bytes{datname=\"befree\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 30,
+      "type": "stat",
+      "title": "Database growth (7 d)",
+      "description": "How much the database grew over the last week.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 57,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(delta(cnpg_pg_database_size_bytes{datname=\"befree\"}[7d]))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "5xx (selected range)",
+      "description": "Requests answered with a server error in the selected range.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 57,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum(count_over_time({namespace=\"befree\", container=\"nginx\"} |~ \"\\\" 5\\\\d\\\\d \" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "Backend errors (selected range)",
+      "description": "WARN and ERROR lines the backend logged in the selected range.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 57,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum(count_over_time({namespace=\"befree\", container=\"backend\"} |~ \" (ERROR|WARN) \" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 33,
+      "type": "logs",
+      "title": "Backend warnings and errors",
+      "description": "WARN and ERROR lines from the backend, with their stack traces.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 61,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{namespace=\"befree\", container=\"backend\"} |~ \" (ERROR|WARN) |^\\\\s+at |Exception\"",
+          "legendFormat": "",
+          "queryType": "range",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    }
+  ]
+}

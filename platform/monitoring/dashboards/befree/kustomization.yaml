@@ -1,0 +1,16 @@
+# The beFree dashboard: Money per budgeting cycle, budgets and goals, and how entries arrive.
+# Product data through the read-only "beFree Postgres" datasource; requests
+# and errors from the app's nginx and backend logs; pods from Prometheus.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: beFree
+configMapGenerator:
+  - name: dashboards-befree
+    files:
+      - befree.json

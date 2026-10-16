@@ -1,0 +1,3093 @@
+{
+  "uid": "beconscient",
+  "title": "beConscient",
+  "description": "Screen time across phone and computer, and the pipeline that collects it: events, devices, derivation and the pods it runs on.",
+  "tags": [
+    "beconscient",
+    "product"
+  ],
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Open beConscient",
+      "type": "link",
+      "url": "https://beconscient.beyouweb.com",
+      "targetBlank": true,
+      "icon": "external link"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Today",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Screen time",
+      "description": "Phone and computer since midnight, counted once when both were on at the same time.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint) AS a, least(s.end_ts, (extract(epoch FROM now()) * 1000)::bigint) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint AND s.start_ts < (extract(epoch FROM now()) * 1000)::bigint\n) SELECT (SELECT coalesce(sum(upper(r) - lower(r)), 0) FROM unnest(\n      (SELECT range_agg(int8range(a, b)) FROM seg WHERE b > a AND true)) r) / 1000.0 AS value"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Phone",
+      "description": "Screen on and unlocked, from the phone's usage stats.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint) AS a, least(s.end_ts, (extract(epoch FROM now()) * 1000)::bigint) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint AND s.start_ts < (extract(epoch FROM now()) * 1000)::bigint\n) SELECT (SELECT coalesce(sum(upper(r) - lower(r)), 0) FROM unnest(\n      (SELECT range_agg(int8range(a, b)) FROM seg WHERE b > a AND device = 'android')) r) / 1000.0 AS value"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Computer",
+      "description": "Desktop session active (input or an inhibitor such as a video playing).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 7,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint) AS a, least(s.end_ts, (extract(epoch FROM now()) * 1000)::bigint) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint AND s.start_ts < (extract(epoch FROM now()) * 1000)::bigint\n) SELECT (SELECT coalesce(sum(upper(r) - lower(r)), 0) FROM unnest(\n      (SELECT range_agg(int8range(a, b)) FROM seg WHERE b > a AND device = 'desktop')) r) / 1000.0 AS value"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Away from screens",
+      "description": "The headline number: awake time today (from the awake window's start until now) with no screen on.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH aw AS (SELECT start_time::time AS s, end_time::time AS e FROM window_settings WHERE kind = 'awake' ORDER BY valid_from DESC LIMIT 1),\nwin AS (\n  SELECT (extract(epoch FROM ((now() AT TIME ZONE 'Europe/Lisbon')::date + aw.s) AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint AS lo,\n         least((extract(epoch FROM now()) * 1000)::bigint, (extract(epoch FROM ((now() AT TIME ZONE 'Europe/Lisbon')::date + aw.e) AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint) AS hi\n  FROM aw\n),\n\nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, (SELECT lo FROM win)) AS a, least(s.end_ts, (SELECT hi FROM win)) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > (SELECT lo FROM win) AND s.start_ts < (SELECT hi FROM win)\n)\nSELECT greatest((SELECT hi - lo FROM win), 0) / 1000.0 - (SELECT coalesce(sum(upper(r) - lower(r)), 0) FROM unnest(\n      (SELECT range_agg(int8range(a, b)) FROM seg WHERE b > a AND true)) r) / 1000.0 AS value"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Unlocks",
+      "description": "Times the phone was unlocked today.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM unlocks\nWHERE version = (SELECT version FROM derivation_state LIMIT 1) AND at >= (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Notifications",
+      "description": "Notifications posted on the phone today (updates and group summaries left out).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 17,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM raw_events\nWHERE type = 'android.notification_posted' AND ts >= (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint\n  AND NOT coalesce((payload->>'is_update')::boolean, false)\n  AND NOT coalesce((payload->>'is_group_summary')::boolean, false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Shorts",
+      "description": "Time in YouTube Shorts on the phone today.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint) AS a, least(s.end_ts, (extract(epoch FROM now()) * 1000)::bigint) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > (extract(epoch FROM date_trunc('day', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint AND s.start_ts < (extract(epoch FROM now()) * 1000)::bigint\n) SELECT coalesce(sum(b - a), 0) / 1000.0 AS value FROM seg WHERE subject LIKE '%#shorts' AND b > a"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "Screen time (selected range)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Screen time per day, by category",
+      "description": "Hours per local day, stacked by the category the app shows. Phone and computer add up here, so overlap counts twice.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 16,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, ($__unixEpochFrom()::bigint * 1000)) AS a, least(s.end_ts, ($__unixEpochTo()::bigint * 1000)) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > ($__unixEpochFrom()::bigint * 1000) AND s.start_ts < ($__unixEpochTo()::bigint * 1000)\n)\nSELECT date_trunc('day', to_timestamp(a / 1000.0) AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon' AS time, category AS metric, sum(b - a) / 3600000.0 AS value\nFROM seg WHERE b > a GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0,
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Away from screens per day",
+      "description": "Awake hours per day split into time with any screen on (phone or computer, counted once) and time away. Today counts up to now.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 6,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH aw AS (SELECT start_time::time AS s, end_time::time AS e FROM window_settings WHERE kind = 'awake' ORDER BY valid_from DESC LIMIT 1),\ndays AS (\n  SELECT dd::date AS day,\n         (extract(epoch FROM (dd::date + aw.s) AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint AS lo,\n         least((extract(epoch FROM now()) * 1000)::bigint, (extract(epoch FROM (dd::date + aw.e) AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint) AS hi\n  FROM aw, generate_series((to_timestamp($__unixEpochFrom()) AT TIME ZONE 'Europe/Lisbon')::date,\n                           (to_timestamp($__unixEpochTo()) AT TIME ZONE 'Europe/Lisbon')::date, interval '1 day') dd\n),\nseg2 AS (\n  SELECT days.day, greatest(s.start_ts, days.lo) AS a, least(s.end_ts, days.hi) AS b\n  FROM days JOIN segments s ON s.end_ts > days.lo AND s.start_ts < days.hi\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n),\nbusy AS (\n  SELECT day, (SELECT coalesce(sum(upper(r) - lower(r)), 0) FROM unnest(range_agg(int8range(a, b))) r) AS ms\n  FROM seg2 WHERE b > a GROUP BY day\n)\nSELECT days.day::timestamp AT TIME ZONE 'Europe/Lisbon' AS time,\n       greatest(days.hi - days.lo - coalesce(busy.ms, 0), 0) / 3600000.0 AS \"Away\",\n       coalesce(busy.ms, 0) / 3600000.0 AS \"On a screen\"\nFROM days LEFT JOIN busy USING (day) WHERE days.hi > days.lo ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0,
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Away"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "On a screen"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8AB8FF"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 12,
+      "type": "bargauge",
+      "title": "Time by category",
+      "description": "Total in the selected range, both devices.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 6,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, ($__unixEpochFrom()::bigint * 1000)) AS a, least(s.end_ts, ($__unixEpochTo()::bigint * 1000)) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > ($__unixEpochFrom()::bigint * 1000) AND s.start_ts < ($__unixEpochTo()::bigint * 1000)\n)\nSELECT category, sum(b - a) / 1000.0 AS time FROM seg WHERE b > a GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "noValue": "none",
+          "color": {
+            "mode": "palette-classic-by-name"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "text": {},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "legend": {
+          "showLegend": false
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Top apps and sites",
+      "description": "Where the time went in the selected range. Sessions are derived segments, not app launches.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 15,
+        "w": 10,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, ($__unixEpochFrom()::bigint * 1000)) AS a, least(s.end_ts, ($__unixEpochTo()::bigint * 1000)) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > ($__unixEpochFrom()::bigint * 1000) AND s.start_ts < ($__unixEpochTo()::bigint * 1000)\n)\nSELECT CASE WHEN kind = 'computer' THEN '(computer session)'\n            WHEN kind = 'unattributed' THEN '(unattributed)'\n            ELSE regexp_replace(subject, '^(app|site):', '') END AS \"App / site\",\n       category AS \"Category\", device AS \"Device\",\n       sum(b - a) / 1000.0 AS \"Time\", count(*) AS \"Sessions\",\n       sum(b - a) / 1000.0 / greatest(count(DISTINCT date_trunc('day', to_timestamp(a / 1000.0) AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon'), 1) AS \"Per active day\"\nFROM seg WHERE b > a GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 25"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": false,
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Per active day"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlPu"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "barchart",
+      "title": "Hour of day",
+      "description": "Average minutes per hour of the day (local time), by device, over the days with any screen time. Attributed to the hour each segment starts.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 15,
+        "w": 8,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, ($__unixEpochFrom()::bigint * 1000)) AS a, least(s.end_ts, ($__unixEpochTo()::bigint * 1000)) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > ($__unixEpochFrom()::bigint * 1000) AND s.start_ts < ($__unixEpochTo()::bigint * 1000)\n),\nhours AS (\n  SELECT device, extract(hour FROM to_timestamp(a / 1000.0) AT TIME ZONE 'Europe/Lisbon')::int AS h, sum(b - a) AS ms\n  FROM seg WHERE b > a GROUP BY 1, 2\n),\nndays AS (SELECT greatest(count(DISTINCT date_trunc('day', to_timestamp(a / 1000.0) AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon'), 1) AS n FROM seg)\nSELECT lpad(g::text, 2, '0') || 'h' AS hour,\n       coalesce(sum(ms) FILTER (WHERE device = 'android'), 0) / 60000.0 / (SELECT n FROM ndays) AS \"Phone\",\n       coalesce(sum(ms) FILTER (WHERE device = 'desktop'), 0) / 60000.0 / (SELECT n FROM ndays) AS \"Computer\"\nFROM generate_series(0, 23) g LEFT JOIN hours ON hours.h = g GROUP BY g ORDER BY g"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "none",
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "gradientMode": "none"
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Phone"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8AB8FF"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Computer"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B877D9"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "vertical",
+        "stacking": "normal",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "showValue": "never",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "xField": "hour"
+      }
+    },
+    {
+      "id": 15,
+      "type": "row",
+      "title": "Phone habits",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Unlocks per day",
+      "description": "Phone unlocks per local day.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('day', to_timestamp(at / 1000.0) AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon' AS time, count(*) AS \"Unlocks\"\nFROM unlocks WHERE version = (SELECT version FROM derivation_state LIMIT 1) AND at >= $__unixEpochFrom()::bigint * 1000 AND at < $__unixEpochTo()::bigint * 1000\nGROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Unlocks"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8AB8FF"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 17,
+      "type": "bargauge",
+      "title": "What pulls you in (first app after unlock)",
+      "description": "The app opened first after each unlock, in the selected range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 26,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT regexp_replace(coalesce(first_app, '(none)'), '^app:', '') AS app, count(*) AS unlocks FROM unlocks\nWHERE version = (SELECT version FROM derivation_state LIMIT 1) AND at >= $__unixEpochFrom()::bigint * 1000 AND at < $__unixEpochTo()::bigint * 1000\nGROUP BY 1 ORDER BY 2 DESC LIMIT 10"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "noValue": "none",
+          "color": {
+            "mode": "palette-classic-by-name"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "text": {},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "legend": {
+          "showLegend": false
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Notifications per day, top apps",
+      "description": "Notifications posted per day; the six apps that sent the most, the rest as 'other'.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 26,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH n AS (\n  SELECT date_trunc('day', to_timestamp(ts / 1000.0) AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon' AS day,\n         payload->>'package' AS pkg\n  FROM raw_events\n  WHERE type = 'android.notification_posted' AND ts >= $__unixEpochFrom()::bigint * 1000 AND ts < $__unixEpochTo()::bigint * 1000\n    AND NOT coalesce((payload->>'is_update')::boolean, false)\n    AND NOT coalesce((payload->>'is_group_summary')::boolean, false)\n),\ntop AS (SELECT pkg FROM n GROUP BY pkg ORDER BY count(*) DESC LIMIT 6)\nSELECT day AS time,\n       CASE WHEN pkg IN (SELECT pkg FROM top) THEN regexp_replace(pkg, '^(com|org|net)\\.', '') ELSE 'other' END AS metric,\n       count(*) AS value\nFROM n GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "YouTube Shorts per day",
+      "description": "Minutes in Shorts per day.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, ($__unixEpochFrom()::bigint * 1000)) AS a, least(s.end_ts, ($__unixEpochTo()::bigint * 1000)) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > ($__unixEpochFrom()::bigint * 1000) AND s.start_ts < ($__unixEpochTo()::bigint * 1000)\n)\nSELECT date_trunc('day', to_timestamp(a / 1000.0) AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon' AS time, sum(b - a) / 60000.0 AS \"Shorts\"\nFROM seg WHERE b > a AND subject LIKE '%#shorts' GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Shorts"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F2495C"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Screen sessions per day",
+      "description": "Derived segments per day and device: a rough measure of how fragmented the attention was.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 34,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH \nseg AS (\n  SELECT s.device_id, dv.kind AS device, s.kind, s.subject,\n         greatest(s.start_ts, ($__unixEpochFrom()::bigint * 1000)) AS a, least(s.end_ts, ($__unixEpochTo()::bigint * 1000)) AS b,\n         CASE\n           WHEN s.kind = 'unattributed' THEN 'Unattributed'\n           WHEN s.kind = 'computer' THEN\n             CASE WHEN w.days IS NOT NULL\n                   AND extract(isodow FROM to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::text = ANY (string_to_array(w.days, ','))\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time >= w.start_time::time\n                   AND (to_timestamp(s.start_ts / 1000.0) AT TIME ZONE 'Europe/Lisbon')::time < w.end_time::time\n                  THEN 'Work' ELSE 'Personal computer' END\n           ELSE coalesce(c.name, 'Uncategorized')\n         END AS category\n  FROM segments s\n  JOIN devices dv ON dv.id = s.device_id\n  LEFT JOIN subject_mappings m ON m.subject_key = s.subject\n  LEFT JOIN categories c ON c.id = m.category_id\n  LEFT JOIN LATERAL (SELECT days, start_time, end_time FROM window_settings\n                     WHERE kind = 'work' ORDER BY valid_from DESC LIMIT 1) w ON true\n  WHERE s.version = (SELECT version FROM derivation_state LIMIT 1)\n    AND s.end_ts > ($__unixEpochFrom()::bigint * 1000) AND s.start_ts < ($__unixEpochTo()::bigint * 1000)\n)\nSELECT date_trunc('day', to_timestamp(a / 1000.0) AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon' AS time, device AS metric, count(*) AS value FROM seg WHERE b > a GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "android"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8AB8FF"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "desktop"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B877D9"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1d"
+    },
+    {
+      "id": 21,
+      "type": "bargauge",
+      "title": "Validation against Android's own total",
+      "description": "beConscient's phone total divided by the number you typed from Android's Digital Wellbeing (last 7 entries). 100% is a perfect match.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 34,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH v AS (SELECT day, minutes FROM validation_inputs ORDER BY day DESC LIMIT 7),\nm AS (\n  SELECT v.day, v.minutes,\n         (SELECT coalesce(sum(least(s.end_ts, hi) - greatest(s.start_ts, lo)), 0) / 60000.0\n          FROM segments s JOIN devices dv ON dv.id = s.device_id AND dv.kind = 'android',\n               LATERAL (SELECT (extract(epoch FROM v.day::timestamp AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint AS lo,\n                               (extract(epoch FROM (v.day + 1)::timestamp AT TIME ZONE 'Europe/Lisbon') * 1000)::bigint AS hi) w\n          WHERE s.version = (SELECT version FROM derivation_state LIMIT 1) AND s.kind <> 'unattributed'\n            AND s.end_ts > lo AND s.start_ts < hi) AS ours\n  FROM v\n)\nSELECT to_char(day, 'Dy DD Mon') AS day, ours / nullif(minutes, 0) AS ratio FROM m ORDER BY m.day DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "noValue": "none",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.85
+              },
+              {
+                "color": "green",
+                "value": 0.95
+              },
+              {
+                "color": "orange",
+                "value": 1.05
+              },
+              {
+                "color": "red",
+                "value": 1.15
+              }
+            ]
+          },
+          "max": 1.3
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "text": {},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "legend": {
+          "showLegend": false
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "row",
+      "title": "Ingestion and pipeline",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Events received, by device and type",
+      "description": "Events stored per hour, by the device that sent them and the event type. Gaps mean the device was off, offline or its agent stopped.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(e.received_at, '1h'), dv.name || ' · ' || e.type AS metric, count(*) AS value\nFROM raw_events e JOIN devices dv ON dv.id = e.device_id\nWHERE $__timeFilter(e.received_at) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.9,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Ingest requests by result",
+      "description": "POSTs to /ingest from the nginx access log. Anything other than 'accepted' is a rejected or failed batch: 400 bad envelope, 401 unknown device, 409 sequence conflict, 413 too large, 429 rate limited, 502/503 backend down.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 6,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (result) (count_over_time({namespace=\"beconscient\", container=\"nginx\"} |~ \"POST /ingest/\" | regexp `\" (?P<status>\\d{3}) ` | label_format result=`{{ if eq .status \"200\" }}accepted{{ else }}{{ .status }}{{ end }}` [$__auto]))",
+          "legendFormat": "{{result}}",
+          "queryType": "range",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "accepted"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Delivery delay",
+      "description": "p95 per hour of the time between a batch being sent and the server receiving it (includes clock skew). Spikes are retries after the phone or the server was offline.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 42,
+        "w": 6,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(b.received_at, '1h'), dv.name AS metric,\n       percentile_cont(0.95) WITHIN GROUP (ORDER BY greatest(b.clock_skew_ms, 0)) / 1000.0 AS value\nFROM batch_log b JOIN installations i ON i.id = b.installation_id JOIN devices dv ON dv.id = i.device_id\nWHERE $__timeFilter(b.received_at) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "table",
+      "title": "Devices",
+      "description": "Each paired device, from its installation and its latest health event. Queue is events waiting on the device; a sensor not 'ok' means that source stopped reporting.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 51,
+        "w": 14,
+        "h": 6
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT dv.name AS \"Device\", dv.kind AS \"Kind\", i.client_version AS \"Version\",\n       i.last_seen_at AS \"Last seen\", i.last_seq AS \"Last batch\",\n       (h.payload->>'queue_depth')::int AS \"Queue\",\n       (h.payload->>'oldest_unsent_age_ms')::bigint / 1000.0 AS \"Oldest unsent\",\n       (SELECT string_agg(k || ': ' || (v->>'state'), ', ' ORDER BY k) FROM jsonb_each(h.payload->'sensors') AS x(k, v)) AS \"Sensors\",\n       i.clone_suspected AS \"Clone?\"\nFROM devices dv\nJOIN installations i ON i.device_id = dv.id AND i.revoked_at IS NULL\nLEFT JOIN LATERAL (SELECT payload FROM raw_events WHERE device_id = dv.id AND type = 'health' ORDER BY ts DESC LIMIT 1) h ON true\nORDER BY dv.name"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": false,
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last seen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Oldest unsent"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sensors"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 380
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": "stat",
+      "title": "Derivation backlog",
+      "description": "Device-days waiting to be re-derived. Derivation runs every 15 s, so this should sit near 0.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 51,
+        "w": 3,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM dirty_blocks"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 28,
+      "type": "stat",
+      "title": "Last derived",
+      "description": "Time since a block was last derived. Grows while no new events arrive (at night, for example).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 17,
+        "y": 51,
+        "w": 2,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT extract(epoch FROM now() - max(derived_at)) AS value FROM blocks"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3600
+              },
+              {
+                "color": "red",
+                "value": 21600
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 29,
+      "type": "stat",
+      "title": "Sequence gaps",
+      "description": "Batches the server never got (missing sequence numbers), in the selected range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 19,
+        "y": 51,
+        "w": 3,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT coalesce(sum(gap_before), 0) AS value FROM batch_log WHERE $__timeFilter(received_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 30,
+      "type": "stat",
+      "title": "Quarantined",
+      "description": "Events rejected as malformed (unknown type, missing id or time...), in the selected range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 22,
+        "y": 51,
+        "w": 2,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM quarantine WHERE $__timeFilter(received_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "Interval conflicts",
+      "description": "Interval rewrites that tried to move a start time, in the range. Ignored by the server; non-zero hints at a client bug.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 54,
+        "w": 3,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM interval_conflicts WHERE $__timeFilter(received_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "Suspect clocks",
+      "description": "Events dated more than a day in the future (bad device clock), in the range.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 17,
+        "y": 54,
+        "w": 2,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS value FROM raw_events WHERE suspect AND $__timeFilter(received_at)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 33,
+      "type": "stat",
+      "title": "Invariant violations",
+      "description": "Derived device-days that broke a rule (overlaps, negative durations). Should be 0.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 19,
+        "y": 54,
+        "w": 3,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT coalesce(sum(invariant_violations), 0) AS value FROM blocks WHERE version = (SELECT version FROM derivation_state LIMIT 1)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 34,
+      "type": "stat",
+      "title": "Duplicates dropped",
+      "description": "Events received twice and dropped, all time. Normal after retries.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "beconscient-postgres"
+      },
+      "gridPos": {
+        "x": 22,
+        "y": 54,
+        "w": 2,
+        "h": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "beconscient-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT coalesce(sum(duplicates), 0) AS value FROM device_counters"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 35,
+      "type": "row",
+      "title": "Resources and errors",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 57,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 36,
+      "type": "timeseries",
+      "title": "Memory by container",
+      "description": "Working set of each container, with its memory limit dashed. Reaching the limit means an OOM kill.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 58,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(pod, container)(container_memory_working_set_bytes{namespace=\"beconscient\",container!=\"\"})",
+          "legendFormat": "{{container}} ({{pod}})",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(pod, container)(kube_pod_container_resource_limits{namespace=\"beconscient\",resource=\"memory\"}) and on(pod, container) container_memory_working_set_bytes{namespace=\"beconscient\",container!=\"\"}",
+          "legendFormat": "limit {{container}}",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "limit .*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 37,
+      "type": "timeseries",
+      "title": "CPU by container",
+      "description": "Cores used per container.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 58,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(pod, container)(rate(container_cpu_usage_seconds_total{namespace=\"beconscient\",container!=\"\"}[$__rate_interval]))",
+          "legendFormat": "{{container}} ({{pod}})",
+          "range": true,
+          "instant": false,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 38,
+      "type": "timeseries",
+      "title": "Requests by status",
+      "description": "API calls through the app's nginx, by HTTP status (static files left out). 5xx means the backend failed or was down.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 58,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (status) (count_over_time({namespace=\"beconscient\", container=\"nginx\"} |~ \"\\\"(GET|POST|PUT|PATCH|DELETE) /(api|ingest|webhooks)/\" | regexp `\" (?P<status>\\d{3}) ` [$__auto]))",
+          "legendFormat": "{{status}}",
+          "queryType": "range",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": false,
+            "barAlignment": 0,
+            "barWidthFactor": 0.8,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "noValue": "none",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "200"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "204"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#96D98D"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "304"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#C8F2C2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "401"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF9830"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "404"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FADE2A"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "500"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F2495C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "502"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#C4162A"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "503"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8F3BB8"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 39,
+      "type": "stat",
+      "title": "Restarts (7 d)",
+      "description": "Container restarts in this namespace over the last week.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 66,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum(increase(kube_pod_container_status_restarts_total{namespace=\"beconscient\"}[7d])))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 40,
+      "type": "stat",
+      "title": "OOM kills (7 d)",
+      "description": "Containers killed for going over their memory limit, last week.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 66,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum(increase(container_oom_events_total{namespace=\"beconscient\"}[7d]))) or vector(0)",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 41,
+      "type": "stat",
+      "title": "Database size",
+      "description": "Size of this app's database in the shared Postgres.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 66,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(cnpg_pg_database_size_bytes{datname=\"beconscient\"})",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 42,
+      "type": "stat",
+      "title": "Database growth (7 d)",
+      "description": "How much the database grew over the last week.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 66,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(delta(cnpg_pg_database_size_bytes{datname=\"beconscient\"}[7d]))",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 43,
+      "type": "stat",
+      "title": "5xx (selected range)",
+      "description": "Requests answered with a server error in the selected range.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 66,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum(count_over_time({namespace=\"beconscient\", container=\"nginx\"} |~ \"\\\" 5\\\\d\\\\d \" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 44,
+      "type": "stat",
+      "title": "Backend errors (selected range)",
+      "description": "WARN and ERROR lines the backend logged in the selected range.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 66,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum(count_over_time({namespace=\"beconscient\", container=\"backend\"} |~ \" (ERROR|WARN) \" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 45,
+      "type": "logs",
+      "title": "Backend warnings and errors",
+      "description": "WARN and ERROR lines from the backend, with their stack traces.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 70,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{namespace=\"beconscient\", container=\"backend\"} |~ \" (ERROR|WARN) |^\\\\s+at |Exception\"",
+          "legendFormat": "",
+          "queryType": "range",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      }
+    }
+  ]
+}
