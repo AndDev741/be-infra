@@ -1,5 +1,7 @@
-# The main app: web app, docs site, backend (database in data/). Errors and
-# heartbeats go to GlitchTip (apps/glitchtip) through the alias in glitchtip.yaml.
+# The main app's backend (database in data/). The web app and the docs site are
+# static files on Cloudflare Workers, deployed by Beyou-Frontend and
+# Beyou-docs-ui CI. Errors and heartbeats go to GlitchTip (apps/glitchtip)
+# through the alias in glitchtip.yaml.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -10,8 +12,6 @@ resources:
   - secrets/beyou-backup.sops.yaml
   - glitchtip.yaml
   - backend.yaml
-  - frontend.yaml
-  - docs.yaml
   - ingress.yaml
   - images.yaml
   - backup.yaml

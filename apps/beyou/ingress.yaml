@@ -1,6 +1,6 @@
-# Traefik (platform/traefik) routes each hostname to its Service. The web app
-# calls api.beyouweb.com directly (VITE_API_URL); the nginx pods also proxy
-# /api/v1/ to the same `backend` Service.
+# Traefik (platform/traefik) routes the API hostname to the backend. The web app
+# and the docs site live on Cloudflare Workers and call api.beyouweb.com
+# directly, so the backend's CORS_ALLOWED_PATTERN lists both origins.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,24 +9,6 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: app.beyouweb.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: beyou-frontend
-                port: { number: 80 }
-    - host: docs.beyouweb.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: beyou-docs
-                port: { number: 80 }
     - host: api.beyouweb.com
       http:
         paths:

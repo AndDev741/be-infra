@@ -24,7 +24,7 @@ Every workload on the node is described here. That covers the beyou, befree and 
 flowchart LR
     internet((Internet)) --> cf["Cloudflare Tunnel<br/>TLS ends here"]
     cf -- "NodePort 30000" --> traefik["Traefik<br/>ns: ingress"]
-    traefik --> beyou["beyou<br/>web app, docs, API"]
+    traefik --> beyou["beyou<br/>API"]
     traefik --> befree[befree]
     traefik --> beconscient[beconscient]
     traefik --> glitchtip[GlitchTip]
@@ -46,7 +46,7 @@ Private apps skip all of that. An Ingress with `ingressClassName: tailscale` get
 
 | Namespace | What runs there | Hostnames | Deployed by |
 |---|---|---|---|
-| `beyou` | Web app, docs site, Spring Boot backend, nightly backup | app, docs and api `.beyouweb.com` | Image automation |
+| `beyou` | Spring Boot backend, nightly backup | api.beyouweb.com | Image automation |
 | `befree` | nginx + Quarkus backend | befree.beyouweb.com | Image automation |
 | `beconscient` | nginx + backend, nightly backup of its database and befree's | beconscient.beyouweb.com | Image automation |
 | `glitchtip` | GlitchTip 6 + Valkey | mnt.beyouweb.com | Pinned digest, by hand |
@@ -124,7 +124,7 @@ flux get kustomizations
 
 ### New images
 
-befree, beconscient and beyou deploy through Flux image automation (each app's `images.yaml`). When CI pushes a new `latest` to GHCR, Flux commits the digest to the `$imagepolicy` marker in the manifest and rolls it out, within about five minutes.
+befree, beconscient and the beyou backend deploy through Flux image automation (each app's `images.yaml`). When CI pushes a new `latest` to GHCR, Flux commits the digest to the `$imagepolicy` marker in the manifest and rolls it out, within about five minutes.
 
 ```sh
 git revert <commit>                 # roll back a bad build
@@ -261,7 +261,9 @@ Two guards stop a secret going out in clear text: the pre-commit hook from `scri
 
 ### beyou
 
-Moved from `Beyou-dev-env`'s compose stack. It runs the web app (app.beyouweb.com), the docs site (docs.beyouweb.com) and the backend (api.beyouweb.com, also reachable at `/api/v1/` behind both nginx through the `backend` Service). Its database is `beyou` in the shared Postgres, its uploads the `beyou-uploads` volume.
+Moved from `Beyou-dev-env`'s compose stack. It runs the backend (api.beyouweb.com). Its database is `beyou` in the shared Postgres, its uploads the `beyou-uploads` volume.
+
+The web app (app.beyouweb.com) and the docs site (docs.beyouweb.com) are not on this node. They are static files served by the Cloudflare Workers `beyou-web` and `beyou-docs`, which Beyou-Frontend and Beyou-docs-ui CI deploy with wrangler after their tests pass; each repository's `wrangler.jsonc` holds the custom domain. Both call api.beyouweb.com from the browser, so `CORS_ALLOWED_PATTERN` in `apps/beyou/secrets/beyou-backend.sops.yaml` lists both origins, comma-separated. A Cloudflare rollback (`wrangler rollback` or the dashboard) undoes a bad frontend build.
 
 The backend's error DSN and heartbeat URLs name `glitchtip:8000`, as they did in compose; `apps/beyou/glitchtip.yaml` is an ExternalName alias to GlitchTip's own namespace. Local development still runs from `Beyou-dev-env`'s compose files, which no longer carry anything for production.
 

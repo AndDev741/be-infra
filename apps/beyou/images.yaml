@@ -1,57 +1,12 @@
 # Continuous deployment, replacing compose's watchtower: CI pushes `latest` to
-# GHCR, Flux notices the new digest and commits it to frontend.yaml / docs.yaml
-# / backend.yaml
-# (the `$imagepolicy` markers), and the beyou Kustomization rolls it out.
-# So git always says exactly which build is running, and a bad build is undone
-# with `git revert`.
+# GHCR, Flux notices the new digest and commits it to backend.yaml (the
+# `$imagepolicy` marker), and the beyou Kustomization rolls it out. The web app
+# and the docs site deploy to Cloudflare from their own CI instead.
+# So git always says exactly which backend build is running, and a bad build is
+# undone with `git revert`.
 #
 # A commit from Flux can be held back by suspending the automation:
 #   flux suspend image update beyou
-apiVersion: image.toolkit.fluxcd.io/v1
-kind: ImageRepository
-metadata:
-  name: beyou-web
-  namespace: beyou
-spec:
-  image: ghcr.io/anddev741/beyou-web
-  interval: 5m
----
-apiVersion: image.toolkit.fluxcd.io/v1
-kind: ImagePolicy
-metadata:
-  name: beyou-web
-  namespace: beyou
-spec:
-  imageRepositoryRef: { name: beyou-web }
-  # Follow the `latest` tag and record its digest.
-  filterTags: { pattern: '^latest$' }
-  policy:
-    alphabetical: { order: asc }
-  digestReflectionPolicy: Always
-  interval: 5m
----
-apiVersion: image.toolkit.fluxcd.io/v1
-kind: ImageRepository
-metadata:
-  name: beyou-docs
-  namespace: beyou
-spec:
-  image: ghcr.io/anddev741/beyou-docs
-  interval: 5m
----
-apiVersion: image.toolkit.fluxcd.io/v1
-kind: ImagePolicy
-metadata:
-  name: beyou-docs
-  namespace: beyou
-spec:
-  imageRepositoryRef: { name: beyou-docs }
-  filterTags: { pattern: '^latest$' }
-  policy:
-    alphabetical: { order: asc }
-  digestReflectionPolicy: Always
-  interval: 5m
----
 apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
