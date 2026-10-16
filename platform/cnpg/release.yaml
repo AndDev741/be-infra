@@ -35,8 +35,7 @@ spec:
       requests: { cpu: 20m, memory: 64Mi }
       limits: { memory: 256Mi }
     monitoring:
-      # The upstream dashboard, picked up by Grafana's sidecar.
+      # The upstream dashboard is off: the Platform folder is gone and the
+      # dashboards in use live in platform/monitoring/dashboards.
       grafanaDashboard:
-        create: true
-        annotations:
-          grafana_folder: Platform
+        create: false
