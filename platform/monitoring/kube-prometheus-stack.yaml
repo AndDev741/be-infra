@@ -57,6 +57,25 @@ spec:
           - action: keep
             sourceLabels: [__name__]
             regex: (kubelet_.*|storage_operation_.*|volume_manager_.*|prober_probe_total|process_.*|rest_client_requests_total)
+          # Latency histograms of the kubelet's own operations; no dashboard
+          # or alert here reads them.
+          - action: drop
+            sourceLabels: [__name__]
+            regex: (kubelet_.*|storage_operation_.*)_bucket
+        # cAdvisor: an allowlist instead of the chart's drop list (this setting
+        # replaces it). Kept: CPU, throttling, memory, OOMs, network and disk
+        # bytes per container; enough for per-app resource panels.
+        cAdvisorMetricRelabelings:
+          - action: keep
+            sourceLabels: [__name__]
+            regex: container_(cpu_usage_seconds_total|cpu_cfs_periods_total|cpu_cfs_throttled_periods_total|memory_working_set_bytes|memory_rss|memory_cache|oom_events_total|network_(receive|transmit)_bytes_total|fs_(reads|writes)_bytes_total)
+          # From the chart's defaults: CNI interfaces, and cgroups with no pod.
+          - action: drop
+            sourceLabels: [__name__, interface]
+            regex: container_network_.*;(cali|cilium|cni|lxc|nodelocaldns|tunl|flannel|veth).*
+          - action: drop
+            sourceLabels: [id, pod]
+            regex: .+;
         # Probe latency per container, in buckets; prober_probe_total covers
         # whether the probes pass.
         probesMetricRelabelings:
@@ -64,29 +83,21 @@ spec:
             sourceLabels: [__name__]
             regex: prober_probe_duration_seconds_bucket
     # The API server's job also carries the whole k3s binary (scheduler,
-    # kubelet, kine), and its histograms are most of its ~30k series. Keep only
-    # the API server's own metrics (and the aggregator's, for its alert), keep
-    # the SLI histogram the default burn-rate rules read (with the chart's own
-    # trim of its buckets), and drop the buckets nothing here reads.
+    # kubelet, kine), ~30k series before any trim. Nothing here reads its
+    # histograms or the SLO/burn-rate rules built on them (the default rules
+    # are off below), so keep only request counts, in-flight requests and the
+    # process metrics: enough for a control-plane panel later.
     kubeApiServer:
       serviceMonitor:
         metricRelabelings:
           - action: keep
             sourceLabels: [__name__]
-            regex: (apiserver_.*|aggregator_.*|etcd_.*|process_.*)
-          - action: drop
-            sourceLabels: [__name__, le]
-            regex: (etcd_request|apiserver_request_slo|apiserver_request_sli|apiserver_request)_duration_seconds_bucket;(0\.15|0\.2|0\.3|0\.35|0\.4|0\.45|0\.6|0\.7|0\.8|0\.9|1\.25|1\.5|1\.75|2|3|3\.5|4|4\.5|6|7|8|9|15|20|40|45|50)(\.0)?
-          - action: drop
-            sourceLabels: [__name__]
-            regex: (etcd_request_duration_seconds|apiserver_request_duration_seconds|apiserver_request_slo_duration_seconds|apiserver_watch_list_duration_seconds|apiserver_request_body_size_bytes|apiserver_watch_cache_read_wait_seconds|apiserver_watch_events_sizes|apiserver_response_sizes|workqueue_work_duration_seconds|workqueue_queue_duration_seconds|apiserver_admission_controller_admission_duration_seconds|apiserver_admission_step_admission_duration_seconds|apiserver_admission_webhook_admission_duration_seconds)_bucket
+            regex: (apiserver_request_total|apiserver_current_inflight_requests|process_.*)
+    # The chart's ~220 default rules: its alerting rules fire nowhere (there
+    # is no Alertmanager; the alerts that email are Grafana's, below), and its
+    # recording rules only feed the chart's dashboards, which are off too.
     defaultRules:
-      rules:
-        etcd: false
-        kubeControllerManager: false
-        kubeSchedulerAlerting: false
-        kubeSchedulerRecording: false
-        kubeProxy: false
+      create: false
 
     prometheus:
       prometheusSpec:
@@ -104,10 +115,11 @@ spec:
         scrapeConfigSelectorNilUsesHelmValues: false
         # Prometheus 3 sets GOMEMLIMIT to 90% of the limit and keeps freed
         # memory up to it: at 1Gi it sat at ~510Mi with a 240Mi heap. With the
-        # trimmed scrapes (~36k series) 512Mi leaves room for compactions.
+        # trimmed scrapes and no default rules (~20k series) 384Mi leaves room
+        # for compactions.
         resources:
-          requests: { cpu: 100m, memory: 256Mi }
-          limits: { memory: 512Mi }
+          requests: { cpu: 100m, memory: 192Mi }
+          limits: { memory: 384Mi }
         storageSpec:
           volumeClaimTemplate:
             spec:
@@ -127,6 +139,22 @@ spec:
           limits: { memory: 64Mi }
 
     kube-state-metrics:
+      # Only the objects the alerts and dashboards read. Left out: secrets,
+      # configmaps, endpoints, replicasets (one per old Deployment revision),
+      # network policies, leases, webhooks and the like.
+      collectors:
+        - cronjobs
+        - daemonsets
+        - deployments
+        - jobs
+        - namespaces
+        - nodes
+        - persistentvolumeclaims
+        - persistentvolumes
+        - pods
+        - resourcequotas
+        - services
+        - statefulsets
       resources:
         requests: { cpu: 10m, memory: 32Mi }
         limits: { memory: 128Mi }
@@ -138,6 +166,9 @@ spec:
 
     grafana:
       fullnameOverride: grafana
+      # The chart's ~25 Kubernetes dashboards. The ones in use are this repo's
+      # (dashboards/ and apps/*), provisioned through the sidecar.
+      defaultDashboardsEnabled: false
       admin:
         existingSecret: grafana-admin
         userKey: admin-user

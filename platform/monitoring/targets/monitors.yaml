@@ -31,15 +31,8 @@ spec:
         values: [helm-controller, kustomize-controller, notification-controller, source-controller]
   podMetricsEndpoints:
     - port: http-prom
----
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: loki
-  namespace: monitoring
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: loki
-  endpoints:
-    - port: http
+      # Reconcile and workqueue latency histograms; nothing here reads them.
+      metricRelabelings:
+        - action: drop
+          sourceLabels: [__name__]
+          regex: (gotk_reconcile_duration_seconds|controller_runtime_reconcile_time_seconds|workqueue_queue_duration_seconds|workqueue_work_duration_seconds|go_gc_.*)_bucket

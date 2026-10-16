@@ -11,7 +11,6 @@ resources:
   - kube-prometheus-stack.yaml
   - loki.yaml
   - alloy.yaml
-  - dashboards/platform
   # Moves to apps/beyou once beyou runs in the cluster (roadmap phase 2).
   - dashboards/beyou
   - dashboards/bepresent
