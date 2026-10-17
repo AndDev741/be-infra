@@ -21,7 +21,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: backend
-          image: ghcr.io/anddev741/beconscient-backend:latest@sha256:dcb298727066e361b7ad177371a85a5746f3f7c90b5d5261fba0f35d821bb933 # {"$imagepolicy": "beconscient:beconscient-backend"}
+          image: ghcr.io/anddev741/beconscient-backend:latest@sha256:8f30dd9715e63e652c961d29ccfac30bb11facdab5e8b7d28ffae9f95b1a3d4f # {"$imagepolicy": "beconscient:beconscient-backend"}
           ports:
             - containerPort: 8080
           envFrom:
