@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: ghcr.io/anddev741/beconscient-frontend:latest@sha256:5c59edd2368ef925b0454984297b68580494a3820ecfa00115781c91a7df3395 # {"$imagepolicy": "beconscient:beconscient-frontend"}
+          image: ghcr.io/anddev741/beconscient-frontend:latest@sha256:3200e7084023b8cf301c3bb039c9b0c2d6e417d3ba3f5e08dc8d68cb6a20f5fa # {"$imagepolicy": "beconscient:beconscient-frontend"}
           ports:
             - containerPort: 8080
           resources:
