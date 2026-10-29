@@ -1,0 +1,82 @@
+# The nightly run: crawl Imovirtual into the shared Postgres, parse, fetch
+# detail pages (coordinates), publish the static site to Cloudflare Pages and
+# send the Telegram alert. One container, one command (apscrap daily); the
+# steps and why they are ordered that way are in the apScrap repo, cli.py.
+#
+# Secrets (apps/apscrap/secrets/):
+#   apscrap-db          PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
+#   apscrap-cloudflare  CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID   (optional: no site without it)
+#   apscrap-telegram    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ALERT_* (optional: no alert without it)
+#
+# A failed run leaves a Failed pod behind, which the "Pod stuck" Grafana alert
+# emails about after 10 minutes. Run one now with
+#   kubectl -n apscrap create job --from=cronjob/apscrap-daily apscrap-manual-$(date +%s)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: apscrap-daily
+  namespace: apscrap
+spec:
+  schedule: "20 4 * * *"
+  timeZone: Europe/Lisbon
+  concurrencyPolicy: Forbid
+  # If the node was down at 04:20 the run still starts when it is back, as long
+  # as that is within two hours. Every missed night is history lost for good.
+  startingDeadlineSeconds: 7200
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # No retry: a retry would crawl the whole site again within the hour.
+      # Tomorrow night is the retry.
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels: { app: apscrap-daily }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: apscrap
+              image: ghcr.io/anddev741/apscrap:latest # {"$imagepolicy": "apscrap:apscrap"}
+              command: ["/usr/bin/tini", "--", "/bin/sh", "-ec"]
+              args:
+                - |
+                  # Hitting the portal at the same second every night is a
+                  # signature; spread the start over APSCRAP_JITTER seconds.
+                  delay=$(( $(od -An -N2 -tu2 /dev/urandom) % (${APSCRAP_JITTER:-1200} + 1) ))
+                  echo "starting in ${delay}s"
+                  sleep "$delay"
+                  # k3s's NetworkPolicy controller lets a new pod's IP through
+                  # only after a few seconds, so the first connection can fail.
+                  # migrate also applies any schema change a new image brings.
+                  for i in $(seq 30); do apscrap migrate && break; sleep 2; done
+                  exec apscrap daily
+              envFrom:
+                - secretRef: { name: apscrap-db }
+                - secretRef: { name: apscrap-cloudflare, optional: true }
+                - secretRef: { name: apscrap-telegram, optional: true }
+              env:
+                - { name: APSCRAP_DELAY, value: "3.0" }
+                # Detail pages are the only source of coordinates. 500 a night
+                # (rentals first) clears the backlog in about ten nights; drop
+                # back to 150 once `apscrap stats` shows most rentals geocoded.
+                - { name: APSCRAP_DETAIL_LIMIT, value: "500" }
+                - { name: APSCRAP_SITE_URL, value: "https://apscrap.beyouweb.com" }
+                - { name: TZ, value: Europe/Lisbon }
+                - { name: HOME, value: /tmp/home }
+              resources:
+                requests: { cpu: 100m, memory: 128Mi }
+                limits: { memory: 512Mi }
+              volumeMounts:
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: tmp
+              emptyDir: { sizeLimit: 256Mi }

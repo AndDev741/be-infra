@@ -1,0 +1,27 @@
+# Nothing here runs all the time: one nightly crawl Job and one backup Job,
+# never at the same time. The crawl peaks around 300Mi while wrangler deploys
+# the site; the database lives in data/.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: apscrap
+  namespace: apscrap
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 512Mi
+    limits.memory: 1536Mi
+    pods: "12"
+    persistentvolumeclaims: "0"
+    services.nodeports: "0"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+  namespace: apscrap
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 50m, memory: 64Mi }
+      default: { memory: 256Mi }

@@ -52,6 +52,7 @@ Private apps skip all of that. An Ingress with `ingressClassName: tailscale` get
 | `glitchtip` | GlitchTip 6 + Valkey | mnt.beyouweb.com | Pinned digest, by hand |
 | `omniroute` | OmniRoute + Redis | omniroute.beyouweb.com | Pinned digest, by hand |
 | `immich` | Immich server and machine learning, Valkey, its own Postgres with VectorChord | immich.tail2f18c7.ts.net (tailnet only) | Pinned digest, by hand |
+| `apscrap` | Nightly CronJob: rental-listing crawl, static site published to Cloudflare Pages, Telegram alert; nightly backup | apscrap.beyouweb.com (Cloudflare Pages, not this node) | Image automation |
 | `data` | Postgres 17, one database and role per app | | CloudNativePG |
 | `monitoring` | Prometheus, Grafana, Loki, Alloy | obs.beyouweb.com | Helm and manifests, pinned versions |
 | `headlamp` | Headlamp with the Flux plugin | headlamp.beyouweb.com | Helm, pinned chart |
@@ -74,6 +75,7 @@ Private apps skip all of that. An Ingress with `ingressClassName: tailscale` get
 | `omniroute` | `apps/omniroute/` | `platform` |
 | `tailscale` | `platform/tailscale/` | |
 | `immich` | `apps/immich/` | `platform` |
+| `apscrap` | `apps/apscrap/` | `platform`, `data` |
 
 ### Repository layout
 

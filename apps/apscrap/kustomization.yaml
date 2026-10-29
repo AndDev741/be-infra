@@ -1,0 +1,13 @@
+# apScrap: rental price history for one person's move. The code is
+# github.com/AndDev741/apscrap; the site it publishes is on Cloudflare Pages.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - limits.yaml
+  - network-policy.yaml
+  - secrets/apscrap-db.sops.yaml
+  - secrets/apscrap-backup.sops.yaml
+  - cronjob.yaml
+  - backup.yaml
+  - images.yaml

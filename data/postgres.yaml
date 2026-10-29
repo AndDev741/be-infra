@@ -74,6 +74,13 @@ spec:
         login: true
         connectionLimit: 3
         passwordSecret: { name: beconscient-db-backup }
+      # apscrap: owner of the apscrap database, used by its nightly crawl and
+      # its backup (apps/apscrap). Five connections is plenty for one Job.
+      - name: apscrap
+        ensure: present
+        login: true
+        connectionLimit: 5
+        passwordSecret: { name: apscrap-db-owner }
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -114,6 +121,16 @@ spec:
   cluster: { name: pg }
   name: beconscient
   owner: beconscient
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: apscrap
+  namespace: data
+spec:
+  cluster: { name: pg }
+  name: apscrap
+  owner: apscrap
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor

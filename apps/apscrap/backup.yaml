@@ -1,0 +1,88 @@
+# Nightly encrypted dump of the apscrap database, into the same restic
+# repository as apps/beconscient (separate --host). This is the one thing in
+# apScrap that cannot be rebuilt: re-crawling brings back today's prices and
+# nothing older.
+#
+# Secret apscrap-backup (secrets/apscrap-backup.sops.yaml):
+#   PGHOST, PGUSER, PGPASSWORD              the apscrap owner role
+#   DATABASES                               "apscrap"
+#   RESTIC_REPOSITORY, RESTIC_PASSWORD      copied from beconscient-backup
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+  namespace: apscrap
+spec:
+  # After the crawl (04:20 + up to 20 min jitter + about an hour), and away
+  # from the other apps' backups, which hold the restic lock around 03:30.
+  schedule: "10 6 * * *"
+  timeZone: Europe/Lisbon
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels: { app: apscrap-backup }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+          volumes:
+            - name: dumps
+              emptyDir: {}
+            - name: cache
+              emptyDir: {}
+          initContainers:
+            - name: dump
+              image: postgres:17-alpine
+              envFrom:
+                - secretRef:
+                    name: apscrap-backup
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  for i in $(seq 60); do pg_isready -q -t 2 && break; sleep 2; done
+                  for db in $DATABASES; do
+                    pg_dump -Fc -d "$db" -f "/dumps/$db.dump"
+                    echo "dumped $db: $(wc -c < "/dumps/$db.dump") bytes"
+                  done
+              volumeMounts:
+                - name: dumps
+                  mountPath: /dumps
+              resources:
+                requests: { cpu: 50m, memory: 32Mi }
+                limits: { memory: 128Mi }
+          containers:
+            - name: restic
+              image: restic/restic:0.18.1
+              envFrom:
+                - secretRef:
+                    name: apscrap-backup
+              env:
+                - name: RESTIC_CACHE_DIR
+                  value: /cache
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  restic backup /dumps --host apscrap-backup --tag k3s-postgres
+                  restic forget --host apscrap-backup --tag k3s-postgres \
+                    --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
+                  restic snapshots --host apscrap-backup --latest 1
+              volumeMounts:
+                - name: dumps
+                  mountPath: /dumps
+                  readOnly: true
+                - name: cache
+                  mountPath: /cache
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 256Mi }

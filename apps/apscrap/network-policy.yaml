@@ -1,0 +1,10 @@
+# Nothing in this namespace listens: the Jobs only reach out (Imovirtual,
+# Cloudflare, Telegram, the object store, Postgres in data/).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: apscrap
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]

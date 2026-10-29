@@ -61,6 +61,8 @@ spec:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: beconscient }
         - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: apscrap }
+        - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: monitoring }
       ports:
         - port: 5432

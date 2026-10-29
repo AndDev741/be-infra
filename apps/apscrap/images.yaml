@@ -1,0 +1,55 @@
+# Continuous deployment: apScrap's CI pushes `latest` to GHCR, Flux commits the
+# new digest to cronjob.yaml (the `$imagepolicy` marker) and the next night's
+# Job runs it. Same setup as apps/beconscient.
+#   flux suspend image update apscrap    # hold deploys back
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: apscrap
+  namespace: apscrap
+spec:
+  image: ghcr.io/anddev741/apscrap
+  interval: 5m
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: apscrap
+  namespace: apscrap
+spec:
+  imageRepositoryRef: { name: apscrap }
+  filterTags: { pattern: '^latest$' }
+  policy:
+    alphabetical: { order: asc }
+  digestReflectionPolicy: Always
+  interval: 5m
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageUpdateAutomation
+metadata:
+  name: apscrap
+  namespace: apscrap
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+    namespace: flux-system
+  git:
+    checkout:
+      ref: { branch: main }
+    commit:
+      author:
+        name: fluxcdbot
+        email: fluxcdbot@users.noreply.github.com
+      messageTemplate: |-
+        Deploy new apscrap image
+
+        {{ range .Changed.Changes -}}
+        - {{ .OldValue }} -> {{ .NewValue }}
+        {{ end -}}
+    push:
+      branch: main
+  update:
+    path: ./apps/apscrap
+    strategy: Setters

@@ -140,3 +140,26 @@ spec:
     provider: sops
     secretRef:
       name: sops-age
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apscrap
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: platform
+    # Its database.
+    - name: data
+  interval: 10m
+  retryInterval: 1m
+  path: ./apps/apscrap
+  prune: true
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

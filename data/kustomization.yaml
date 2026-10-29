@@ -12,4 +12,5 @@ resources:
   - secrets/beconscient-db-backup.sops.yaml
   - secrets/befree-db-readonly.sops.yaml
   - secrets/beconscient-db-readonly.sops.yaml
+  - secrets/apscrap-db-owner.sops.yaml
   - postgres.yaml
