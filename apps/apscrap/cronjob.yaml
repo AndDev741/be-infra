@@ -33,7 +33,7 @@ spec:
       activeDeadlineSeconds: 7200
       template:
         metadata:
-          labels: { app: apscrap-daily }
+          labels: {app: apscrap-daily}
         spec:
           restartPolicy: Never
           automountServiceAccountToken: false
@@ -42,10 +42,10 @@ spec:
             runAsUser: 10001
             runAsGroup: 10001
             fsGroup: 10001
-            seccompProfile: { type: RuntimeDefault }
+            seccompProfile: {type: RuntimeDefault}
           containers:
             - name: apscrap
-              image: ghcr.io/anddev741/apscrap:latest # {"$imagepolicy": "apscrap:apscrap"}
+              image: ghcr.io/anddev741/apscrap:latest@sha256:fcb8dadbc1f034841573b118a12c55cdcb35b96e7b0dbb14cf719ac6351f367d # {"$imagepolicy": "apscrap:apscrap"}
               command: ["/usr/bin/tini", "--", "/bin/sh", "-ec"]
               args:
                 - |
@@ -60,23 +60,23 @@ spec:
                   for i in $(seq 30); do apscrap migrate && break; sleep 2; done
                   exec apscrap daily
               envFrom:
-                - secretRef: { name: apscrap-db }
-                - secretRef: { name: apscrap-cloudflare, optional: true }
-                - secretRef: { name: apscrap-telegram, optional: true }
+                - secretRef: {name: apscrap-db}
+                - secretRef: {name: apscrap-cloudflare, optional: true}
+                - secretRef: {name: apscrap-telegram, optional: true}
               env:
-                - { name: APSCRAP_DELAY, value: "3.0" }
+                - {name: APSCRAP_DELAY, value: "3.0"}
                 # Detail pages are the only source of coordinates. 500 a night
                 # (rentals first) clears the backlog in about ten nights; drop
                 # back to 150 once `apscrap stats` shows most rentals geocoded.
-                - { name: APSCRAP_DETAIL_LIMIT, value: "500" }
-                - { name: APSCRAP_SITE_URL, value: "https://apscrap.beyouweb.com" }
-                - { name: TZ, value: Europe/Lisbon }
-                - { name: HOME, value: /tmp/home }
+                - {name: APSCRAP_DETAIL_LIMIT, value: "500"}
+                - {name: APSCRAP_SITE_URL, value: "https://apscrap.beyouweb.com"}
+                - {name: TZ, value: Europe/Lisbon}
+                - {name: HOME, value: /tmp/home}
               resources:
-                requests: { cpu: 100m, memory: 128Mi }
-                limits: { memory: 512Mi }
+                requests: {cpu: 100m, memory: 128Mi}
+                limits: {memory: 512Mi}
               volumeMounts:
-                - { name: tmp, mountPath: /tmp }
+                - {name: tmp, mountPath: /tmp}
           volumes:
             - name: tmp
-              emptyDir: { sizeLimit: 256Mi }
+              emptyDir: {sizeLimit: 256Mi}
