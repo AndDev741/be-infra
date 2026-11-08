@@ -2,9 +2,12 @@
 # backend (GENERIC_BASE_URL) through omniroute.beyouweb.com. Moved from
 # ~/omniroute's compose project; its SQLite store is the omniroute-data volume.
 #
-# On :next, pinned by digest, because 3.8.51 predates the fix for upstream
-# #14092 (provider model lists hang on a stale Content-Length). Move to a
-# release tag once one ships with it.
+# Release 3.8.53, pinned by digest. The :next build from early October told
+# Google it was Antigravity IDE 2.1.1 / CLI 1.1.5, and from 2026-11-07 Google
+# answered every Antigravity request with "This version of Antigravity is no
+# longer supported" inside a 200, so no combo fallback kicked in. 3.8.53 raises
+# the floors to 2.5.5 / 1.3.4 (upstream #16512, #16559). No env var overrides
+# that version, so when Google raises its minimum again, upgrade the image.
 #
 # The `omniroute` Secret is ~/omniroute/.env (scripts/create-omniroute-secret.sh).
 # Losing STORAGE_ENCRYPTION_KEY or API_KEY_SECRET makes the stored provider
@@ -45,7 +48,7 @@ spec:
       terminationGracePeriodSeconds: 40
       containers:
         - name: omniroute
-          image: diegosouzapw/omniroute:next@sha256:79a8f293a798b6e3cfcb9418f38198e57e7bd0205d9b9b8f7f1d432fd32f6e74
+          image: diegosouzapw/omniroute:3.8.53@sha256:b52a17661a1aff42ffb78f349f423e986dfc55b57274f28559f8387622ef8ee4
           envFrom:
             - secretRef: { name: omniroute }
           env:
