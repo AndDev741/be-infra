@@ -33,7 +33,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: web
-          image: ghcr.io/anddev741/apscrap:latest@sha256:cb710d60ee51d5bacbc994902e38043d0c940b9c457bf549c35586c4eed23d56 # {"$imagepolicy": "apscrap:apscrap"}
+          image: ghcr.io/anddev741/apscrap:latest@sha256:16507556c7953f6985b63d2feae6697e2b1440dcbc7c4cf854f0ada859553ebe # {"$imagepolicy": "apscrap:apscrap"}
           command: ["/usr/bin/tini", "--", "/bin/sh", "-ec"]
           args:
             - |
