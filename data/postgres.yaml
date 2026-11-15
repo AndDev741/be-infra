@@ -65,6 +65,13 @@ spec:
         login: true
         connectionLimit: 5
         passwordSecret: { name: beconscient-db-readonly }
+      # apscrap_readonly: the apScrap assistant's SQL tool. SELECT on views and
+      # aggregate tables only, granted by apScrap's sql/004_app.sql.
+      - name: apscrap_readonly
+        ensure: present
+        login: true
+        connectionLimit: 3
+        passwordSecret: { name: apscrap-db-readonly }
       # beconscient_backup: the nightly dump of the befree and beconscient
       # databases (apps/beconscient/backup.yaml). Granted SELECT on those two
       # only (README.md, "befree and beconscient"), not pg_read_all_data, which

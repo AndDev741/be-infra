@@ -1,6 +1,6 @@
-# Nothing here runs all the time: one nightly crawl Job and one backup Job,
-# never at the same time. The crawl peaks around 300Mi while wrangler deploys
-# the site; the database lives in data/.
+# One small always-on app (apscrap-web, 128Mi request) plus one nightly crawl
+# Job and one backup Job, never at the same time. The crawl peaks around 300Mi
+# while wrangler deploys the site; the database lives in data/.
 apiVersion: v1
 kind: ResourceQuota
 metadata:

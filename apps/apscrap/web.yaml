@@ -1,0 +1,110 @@
+# The two-person app (apScrap's `apscrap serve`): the site plus a JSON API and
+# the assistant, from the same image as the nightly crawl. Cloudflare Access
+# guards the hostname; the app checks the Access JWT on every API call
+# (CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD in apscrap-access) and answers 503
+# until that secret exists.
+#
+# Secrets (apps/apscrap/secrets/):
+#   apscrap-db           the owner login, for votes, notes and photos
+#   apscrap-db-readonly  the assistant's SQL tool (role apscrap_readonly)
+#   apscrap-llm          LLM_BASE_URL, LLM_API_KEY, LLM_MODEL (OmniRoute)
+#   apscrap-access       CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD  (optional until Access exists)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apscrap-web
+  namespace: apscrap
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: apscrap-web }
+  template:
+    metadata:
+      labels: { app: apscrap-web }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: web
+          image: ghcr.io/anddev741/apscrap:latest@sha256:d4fc3cef98e054ff69fb711bd13de7e3744520b7e1d526d030f12151a2b386c4 # {"$imagepolicy": "apscrap:apscrap"}
+          command: ["/usr/bin/tini", "--", "/bin/sh", "-ec"]
+          args:
+            - |
+              # Schema changes from a new image apply here too, so the app
+              # never waits for the night's crawl. Same retry as the CronJob:
+              # a new pod's IP takes a few seconds to pass the NetworkPolicy.
+              for i in $(seq 30); do apscrap migrate && break; sleep 2; done
+              exec apscrap serve --port 8080
+          ports:
+            - { name: http, containerPort: 8080 }
+          envFrom:
+            - secretRef: { name: apscrap-db }
+            - secretRef: { name: apscrap-db-readonly }
+            - secretRef: { name: apscrap-llm, optional: true }
+            - secretRef: { name: apscrap-access, optional: true }
+            - secretRef: { name: apscrap-telegram, optional: true }
+          env:
+            - { name: TZ, value: Europe/Lisbon }
+            - { name: HOME, value: /tmp/home }
+          startupProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 20m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apscrap-web
+  namespace: apscrap
+spec:
+  selector: { app: apscrap-web }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+# casa.beyouweb.com reaches Traefik through the Cloudflare Tunnel; the Access
+# application on that hostname decides who gets in (the two of them).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: apscrap-web
+  namespace: apscrap
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: casa.beyouweb.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: apscrap-web
+                port: { number: 8080 }

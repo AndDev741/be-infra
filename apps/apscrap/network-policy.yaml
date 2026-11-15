@@ -1,5 +1,6 @@
-# Nothing in this namespace listens: the Jobs only reach out (Imovirtual,
-# Cloudflare, Telegram, the object store, Postgres in data/).
+# The Jobs only reach out (Imovirtual, Standvirtual on demand, INE, DGEG,
+# Cloudflare, Telegram, OmniRoute, the object store, Postgres in data/). The
+# app (apscrap-web) also takes requests from Traefik, below.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -8,3 +9,20 @@ metadata:
 spec:
   podSelector: {}
   policyTypes: [Ingress]
+---
+# The app (web.yaml) listens on 8080 for Traefik only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-from-ingress
+  namespace: apscrap
+spec:
+  podSelector:
+    matchLabels: { app: apscrap-web }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress }
+      ports:
+        - port: 8080

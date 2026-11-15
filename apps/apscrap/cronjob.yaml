@@ -63,6 +63,8 @@ spec:
                 - secretRef: {name: apscrap-db}
                 - secretRef: {name: apscrap-cloudflare, optional: true}
                 - secretRef: {name: apscrap-telegram, optional: true}
+                # the weekly diary's prose (optional: the facts stand alone)
+                - secretRef: {name: apscrap-llm, optional: true}
               env:
                 - {name: APSCRAP_DELAY, value: "3.0"}
                 # Detail pages are the only source of coordinates. 500 a night
@@ -70,6 +72,7 @@ spec:
                 # back to 150 once `apscrap stats` shows most rentals geocoded.
                 - {name: APSCRAP_DETAIL_LIMIT, value: "500"}
                 - {name: APSCRAP_SITE_URL, value: "https://apscrap.beyouweb.com"}
+                - {name: APSCRAP_APP_URL, value: "https://casa.beyouweb.com/"}
                 - {name: TZ, value: Europe/Lisbon}
                 - {name: HOME, value: /tmp/home}
               resources:
