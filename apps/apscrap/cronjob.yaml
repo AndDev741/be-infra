@@ -47,7 +47,7 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           containers:
             - name: apscrap
-              image: ghcr.io/anddev741/apscrap:latest@sha256:9068d74fd69ada6308c5f11678d46abf527746f9b59e12ec3dbf6e8ead04d5f9 # {"$imagepolicy": "apscrap:apscrap"}
+              image: ghcr.io/anddev741/apscrap:latest@sha256:0a64ac92bbde772ee1676ec2e38a073f208ba5ab8f070d4c3f6643a396b00292 # {"$imagepolicy": "apscrap:apscrap"}
               command: ["/usr/bin/tini", "--", "/bin/sh", "-ec"]
               args:
                 - |
