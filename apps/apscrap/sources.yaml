@@ -1,0 +1,78 @@
+# The other portals (RE/MAX, KW, ERA, Casa Sapo): rentals for the councils in
+# the app's settings, crawled and parsed by `apscrap sources`. At 00:30 so it
+# is done well before apscrap-daily (04:20), which marks adverts gone, folds
+# copies across portals and refreshes the read models for every portal. 00:30
+# Lisbon is 00:30 UTC in winter and 23:30 UTC in summer, both inside the
+# 23:00-11:00 UTC visit window Casa Sapo's robots.txt asks for (Casa Sapo skips
+# itself outside it). The steps are in the apScrap repo, cli.py _sources.
+#
+# Secrets: apscrap-db only. Run one now with
+#   kubectl -n apscrap create job --from=cronjob/apscrap-sources apscrap-sources-$(date +%s)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: apscrap-sources
+  namespace: apscrap
+spec:
+  schedule: "30 0 * * *"
+  timeZone: Europe/Lisbon
+  concurrencyPolicy: Forbid
+  # Late is fine until about 02:30; later and it would still be running when
+  # apscrap-daily starts at 04:20.
+  startingDeadlineSeconds: 7200
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # No retry: a retry would crawl every portal again within the hour.
+      # Tomorrow night is the retry.
+      backoffLimit: 0
+      # The first nights read each portal's backlog of detail pages; after
+      # that it is about an hour, most of it Casa Sapo's 45 s per page.
+      activeDeadlineSeconds: 10800
+      template:
+        metadata:
+          labels: {app: apscrap-sources}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: apscrap
+              image: ghcr.io/anddev741/apscrap:latest@sha256:d197296f5adc9e8f7d9c346d4612f08b6e4352919bae943c6dcf5926f562afe1 # {"$imagepolicy": "apscrap:apscrap"}
+              command: ["/usr/bin/tini", "--", "/bin/sh", "-ec"]
+              args:
+                - |
+                  # Hitting the portal at the same second every night is a
+                  # signature; spread the start over APSCRAP_JITTER seconds.
+                  delay=$(( $(od -An -N2 -tu2 /dev/urandom) % (${APSCRAP_JITTER:-1200} + 1) ))
+                  echo "starting in ${delay}s"
+                  sleep "$delay"
+                  # k3s's NetworkPolicy controller lets a new pod's IP through
+                  # only after a few seconds, so the first connection can fail.
+                  # migrate also applies any schema change a new image brings.
+                  for i in $(seq 30); do apscrap migrate && break; sleep 2; done
+                  exec apscrap sources
+              envFrom:
+                - secretRef: {name: apscrap-db}
+              env:
+                - {name: APSCRAP_DELAY, value: "3.0"}
+                # Detail pages per portal per night (RE/MAX, KW, ERA). The
+                # first nights clear each backlog (KW's is ~1,000, mostly let
+                # flats it keeps online); after that only new and changed ones.
+                - {name: APSCRAP_SOURCES_DETAIL_LIMIT, value: "400"}
+                - {name: TZ, value: Europe/Lisbon}
+                - {name: HOME, value: /tmp/home}
+              resources:
+                requests: {cpu: 100m, memory: 128Mi}
+                limits: {memory: 512Mi}
+              volumeMounts:
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: tmp
+              emptyDir: {sizeLimit: 256Mi}

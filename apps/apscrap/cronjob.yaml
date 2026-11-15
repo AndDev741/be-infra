@@ -1,6 +1,8 @@
 # The nightly run: crawl Imovirtual into the shared Postgres, parse, fetch
-# detail pages (coordinates), publish the static site to Cloudflare Pages and
-# send the Telegram alert. One container, one command (apscrap daily); the
+# detail pages (coordinates), then for every portal (including what
+# apscrap-sources parsed earlier in the night) mark adverts gone, fold copies
+# across portals and refresh the app's read models; publish the old static
+# site to Cloudflare Pages and send the Telegram alert. One container, one command (apscrap daily); the
 # steps and why they are ordered that way are in the apScrap repo, cli.py.
 #
 # Secrets (apps/apscrap/secrets/):
@@ -67,10 +69,10 @@ spec:
                 - secretRef: {name: apscrap-llm, optional: true}
               env:
                 - {name: APSCRAP_DELAY, value: "3.0"}
-                # Detail pages are the only source of coordinates. 500 a night
-                # (rentals first) clears the backlog in about ten nights; drop
-                # back to 150 once `apscrap stats` shows most rentals geocoded.
-                - {name: APSCRAP_DETAIL_LIMIT, value: "500"}
+                # Detail pages are the only source of coordinates. The backlog
+                # is cleared, so 150 a night covers new rentals and leaves
+                # request budget to the other portals (sources.yaml).
+                - {name: APSCRAP_DETAIL_LIMIT, value: "150"}
                 - {name: APSCRAP_SITE_URL, value: "https://apscrap.beyouweb.com"}
                 - {name: APSCRAP_APP_URL, value: "https://apscrap.beyouweb.com/"}
                 - {name: TZ, value: Europe/Lisbon}
