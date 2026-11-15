@@ -19,10 +19,10 @@ spec:
   strategy:
     type: Recreate
   selector:
-    matchLabels: { app: apscrap-web }
+    matchLabels: {app: apscrap-web}
   template:
     metadata:
-      labels: { app: apscrap-web }
+      labels: {app: apscrap-web}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -30,10 +30,10 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
-        seccompProfile: { type: RuntimeDefault }
+        seccompProfile: {type: RuntimeDefault}
       containers:
         - name: web
-          image: ghcr.io/anddev741/apscrap:latest@sha256:d4fc3cef98e054ff69fb711bd13de7e3744520b7e1d526d030f12151a2b386c4 # {"$imagepolicy": "apscrap:apscrap"}
+          image: ghcr.io/anddev741/apscrap:latest@sha256:22482dac7923a1f37927e8353c152d09255bb297808f58f836b43f61af6c41f7 # {"$imagepolicy": "apscrap:apscrap"}
           command: ["/usr/bin/tini", "--", "/bin/sh", "-ec"]
           args:
             - |
@@ -43,41 +43,41 @@ spec:
               for i in $(seq 30); do apscrap migrate && break; sleep 2; done
               exec apscrap serve --port 8080
           ports:
-            - { name: http, containerPort: 8080 }
+            - {name: http, containerPort: 8080}
           envFrom:
-            - secretRef: { name: apscrap-db }
-            - secretRef: { name: apscrap-db-readonly }
-            - secretRef: { name: apscrap-llm, optional: true }
-            - secretRef: { name: apscrap-access, optional: true }
-            - secretRef: { name: apscrap-telegram, optional: true }
+            - secretRef: {name: apscrap-db}
+            - secretRef: {name: apscrap-db-readonly}
+            - secretRef: {name: apscrap-llm, optional: true}
+            - secretRef: {name: apscrap-access, optional: true}
+            - secretRef: {name: apscrap-telegram, optional: true}
           env:
-            - { name: TZ, value: Europe/Lisbon }
-            - { name: HOME, value: /tmp/home }
+            - {name: TZ, value: Europe/Lisbon}
+            - {name: HOME, value: /tmp/home}
           startupProbe:
-            httpGet: { path: /api/health, port: http }
+            httpGet: {path: /api/health, port: http}
             periodSeconds: 5
             failureThreshold: 36
           readinessProbe:
-            httpGet: { path: /api/health, port: http }
+            httpGet: {path: /api/health, port: http}
             periodSeconds: 15
             timeoutSeconds: 5
           livenessProbe:
-            httpGet: { path: /api/health, port: http }
+            httpGet: {path: /api/health, port: http}
             periodSeconds: 60
             timeoutSeconds: 5
             failureThreshold: 3
           resources:
-            requests: { cpu: 20m, memory: 128Mi }
-            limits: { memory: 384Mi }
+            requests: {cpu: 20m, memory: 128Mi}
+            limits: {memory: 384Mi}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            capabilities: { drop: [ALL] }
+            capabilities: {drop: [ALL]}
           volumeMounts:
-            - { name: tmp, mountPath: /tmp }
+            - {name: tmp, mountPath: /tmp}
       volumes:
         - name: tmp
-          emptyDir: { sizeLimit: 64Mi }
+          emptyDir: {sizeLimit: 64Mi}
 ---
 apiVersion: v1
 kind: Service
@@ -85,9 +85,9 @@ metadata:
   name: apscrap-web
   namespace: apscrap
 spec:
-  selector: { app: apscrap-web }
+  selector: {app: apscrap-web}
   ports:
-    - { name: http, port: 8080, targetPort: http }
+    - {name: http, port: 8080, targetPort: http}
 ---
 # casa.beyouweb.com reaches Traefik through the Cloudflare Tunnel; the Access
 # application on that hostname decides who gets in (the two of them).
@@ -107,4 +107,4 @@ spec:
             backend:
               service:
                 name: apscrap-web
-                port: { number: 8080 }
+                port: {number: 8080}
