@@ -89,8 +89,10 @@ spec:
   ports:
     - {name: http, port: 8080, targetPort: http}
 ---
-# casa.beyouweb.com reaches Traefik through the Cloudflare Tunnel; the Access
-# application on that hostname decides who gets in (the two of them).
+# apscrap.beyouweb.com reaches Traefik through the Cloudflare Tunnel; the Access
+# application on that hostname decides who gets in (the two of them). It used to
+# point at the static site on Cloudflare Pages, which now only answers on
+# apscrap.pages.dev. /api/health is public (an Access bypass) for checks.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -99,7 +101,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: casa.beyouweb.com
+    - host: apscrap.beyouweb.com
       http:
         paths:
           - path: /

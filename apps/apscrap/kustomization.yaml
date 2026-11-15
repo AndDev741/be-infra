@@ -1,6 +1,6 @@
 # apScrap: price history for a move, and the two-person app on top of it
-# (casa.beyouweb.com). The code is github.com/AndDev741/apscrap; the old static
-# site on Cloudflare Pages stays up as a read-only fallback for now.
+# (apscrap.beyouweb.com). The code is github.com/AndDev741/apscrap; the old static
+# site still publishes to Cloudflare Pages (apscrap.pages.dev) as a fallback.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
