@@ -12,6 +12,7 @@ resources:
   - secrets/apscrap-cloudflare.sops.yaml
   - secrets/apscrap-db-readonly.sops.yaml
   - secrets/apscrap-llm.sops.yaml
+  - secrets/apscrap-access.sops.yaml
   - cronjob.yaml
   - backup.yaml
   - web.yaml
