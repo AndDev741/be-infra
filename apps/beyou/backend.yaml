@@ -39,7 +39,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: backend
-          image: ghcr.io/anddev741/beyou-backend:latest@sha256:b70b50bfa8ca7f491ab09f64483bedb8722c062471516e2664b1de0f1f901e63 # {"$imagepolicy": "beyou:beyou-backend"}
+          image: ghcr.io/anddev741/beyou-backend:latest@sha256:3690129bd57a9843a245e3fa0f93ffd6cd37157a66bd678dfc2bfdfcdca4a26a # {"$imagepolicy": "beyou:beyou-backend"}
           envFrom:
             - secretRef:
                 name: beyou-backend
