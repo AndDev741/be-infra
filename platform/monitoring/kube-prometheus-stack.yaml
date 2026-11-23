@@ -329,6 +329,61 @@ spec:
                       expression: A
                       conditions:
                         - evaluator: { type: gt, params: [0.85] }
+              # The storms of 2026-11-12..22: pods cannot swap (kubelet NoSwap), so
+              # when they grow the kernel swaps out k3s itself (~730Mi of k3s.service
+              # sat in swap). The API server then stalls, every controller loses its
+              # leader election and the whole cluster restarts. MemAvailable never
+              # went under 10% during any of them, so host-memory above stays quiet.
+              # A full memory stall over 10% matched all six storms in 15 days of
+              # history and nothing else.
+              - uid: host-memory-stall
+                title: Host stalling on memory
+                condition: C
+                for: 2m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "Every task waited on memory more than 10% of the time over 5 minutes. The node is swapping k3s; a cluster-wide restart usually follows"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: 'rate(node_pressure_memory_stalled_seconds_total[5m])'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [0.1] }
+              - uid: node-not-ready
+                title: Node not Ready
+                condition: C
+                for: 1m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "beyou-server has reported NotReady for a minute; pods on it are about to restart"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: 'sum(kube_node_status_condition{condition="Ready",status="true"})'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: lt, params: [1] }
             - orgId: 1
               name: workloads
               folder: Alerts
@@ -358,6 +413,36 @@ spec:
                       expression: A
                       conditions:
                         - evaluator: { type: gt, params: [2] }
+              # Container restarting above counts per container, and a storm
+              # restarts each one only once or twice. This counts the cluster.
+              # The 30m window keeps the alert firing well after the storm: during
+              # one CoreDNS is down too, the first email fails on DNS
+              # (2026-11-22 15:19) and Grafana only retries while the alert is
+              # still active. Over 8 matched all six storms and nothing else.
+              - uid: restart-storm
+                title: Cluster-wide restart storm
+                condition: C
+                for: 0m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "More than 8 containers restarted across the cluster in 30 minutes, usually after the node stalled on memory"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 1800, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      expr: 'sum(increase(kube_pod_container_status_restarts_total[30m]))'
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [8] }
               - uid: pod-not-running
                 title: Pod stuck
                 condition: C
