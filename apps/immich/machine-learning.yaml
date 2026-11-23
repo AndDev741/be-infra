@@ -66,9 +66,12 @@ spec:
             httpGet: { path: /ping, port: http }
             periodSeconds: 10
             timeoutSeconds: 10
+          # Peak 744Mi over 2026-11-08..23 with the scheduler keeping one model
+          # loaded at a time. 1024Mi leaves ~280Mi over that; a run that needs
+          # more gets OOM-killed here instead of pushing k3s into swap.
           resources:
             requests: { cpu: 100m, memory: 256Mi }
-            limits: { memory: 1280Mi }
+            limits: { memory: 1024Mi }
       volumes:
         - name: cache
           persistentVolumeClaim:

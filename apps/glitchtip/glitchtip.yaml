@@ -80,9 +80,10 @@ spec:
             httpGet: { path: /_health/, port: http }
             periodSeconds: 10
             timeoutSeconds: 5
+          # Steady at ~260Mi, peak 269Mi over 2026-11-08..23.
           resources:
             requests: { cpu: 50m, memory: 256Mi }
-            limits: { memory: 640Mi }
+            limits: { memory: 448Mi }
       volumes:
         - name: uploads
           persistentVolumeClaim:

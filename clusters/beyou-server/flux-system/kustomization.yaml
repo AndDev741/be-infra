@@ -3,3 +3,24 @@ kind: Kustomization
 resources:
 - gotk-components.yaml
 - gotk-sync.yaml
+# The bootstrap gives every controller a 1Gi memory limit: 6Gi in all on a
+# node with 7.6Gi. Measured over 2026-11-08..23 the busiest one,
+# source-controller reading Helm repository indexes, peaked at 210Mi.
+# helm-controller keeps more room because rendering
+# kube-prometheus-stack with its CRDs is the heaviest thing Flux does here.
+# Patching here (not gotk-components.yaml) survives `flux bootstrap` upgrades.
+patches:
+- target:
+    kind: Deployment
+    labelSelector: app.kubernetes.io/part-of=flux
+  patch: |
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/memory
+      value: 512Mi
+- target:
+    kind: Deployment
+    name: helm-controller
+  patch: |
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/memory
+      value: 768Mi
