@@ -1,17 +1,16 @@
 # The nightly run: crawl Imovirtual into the shared Postgres, parse, fetch
 # detail pages (coordinates), then for every portal (including what
 # apscrap-sources parsed earlier in the night) mark adverts gone, fold copies
-# across portals and refresh the app's read models; publish the old static
-# site to Cloudflare Pages and send the Telegram alert. One container, one command (apscrap daily); the
-# steps and why they are ordered that way are in the apScrap repo, cli.py.
+# across portals and refresh the app's read models; then the Telegram alert.
+# One container, one command (apscrap daily); the steps and why they are
+# ordered that way are in the apScrap repo, cli.py.
 #
 # Secrets (apps/apscrap/secrets/):
 #   apscrap-db          PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
-#   apscrap-cloudflare  CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID   (optional: no site without it)
 #   apscrap-telegram    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ALERT_* (optional: no alert without it)
 #
-# A failed run leaves a Failed pod behind, which the "Pod stuck" Grafana alert
-# emails about after 10 minutes. Run one now with
+# A failed run makes the "CronJob failed" Grafana alert email, and the next
+# good run clears it. The Failed pod stays for its logs. Run one now with
 #   kubectl -n apscrap create job --from=cronjob/apscrap-daily apscrap-manual-$(date +%s)
 apiVersion: batch/v1
 kind: CronJob
@@ -63,7 +62,6 @@ spec:
                   exec apscrap daily
               envFrom:
                 - secretRef: {name: apscrap-db}
-                - secretRef: {name: apscrap-cloudflare, optional: true}
                 - secretRef: {name: apscrap-telegram, optional: true}
                 # the weekly diary's prose (optional: the facts stand alone)
                 - secretRef: {name: apscrap-llm, optional: true}
