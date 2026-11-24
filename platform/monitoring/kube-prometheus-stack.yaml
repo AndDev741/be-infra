@@ -458,7 +458,48 @@ spec:
                     model:
                       refId: A
                       instant: true
-                      expr: 'sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Failed|Unknown"})'
+                      # A Job's failed pod stays behind for its logs until the
+                      # CronJob's history (failedJobsHistoryLimit) drops it,
+                      # often for days. "CronJob failed" below reports those
+                      # runs, so a Failed pod owned by a Job is left out here.
+                      # Pending and Unknown still count for every pod.
+                      expr: >-
+                        (sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown"}) > 0)
+                        or
+                        (sum by (namespace, pod) (kube_pod_status_phase{phase="Failed"}) > 0
+                          unless on (namespace, pod) kube_pod_owner{owner_kind="Job"})
+                  - refId: C
+                    datasourceUid: __expr__
+                    model:
+                      refId: C
+                      type: threshold
+                      expression: A
+                      conditions:
+                        - evaluator: { type: gt, params: [0] }
+              - uid: cronjob-failed
+                title: CronJob failed
+                condition: C
+                for: 5m
+                noDataState: OK
+                execErrState: Error
+                annotations:
+                  summary: "The last run of a CronJob ended without success. It clears when a run succeeds; the logs are in the Job's Failed pod"
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 600, to: 0 }
+                    datasourceUid: prometheus
+                    model:
+                      refId: A
+                      instant: true
+                      # Scheduled after the last success (or never succeeded)
+                      # and nothing running now: the last run failed.
+                      expr: >-
+                        (
+                          (kube_cronjob_status_last_schedule_time > on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+                          or
+                          (kube_cronjob_status_last_schedule_time unless on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+                        )
+                        and on (namespace, cronjob) (kube_cronjob_status_active == 0)
                   - refId: C
                     datasourceUid: __expr__
                     model:

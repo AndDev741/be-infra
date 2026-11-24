@@ -144,7 +144,7 @@ Grafana is at https://obs.beyouweb.com. The admin login is in `platform/monitori
 |---|---|---|
 | Prometheus (kube-prometheus-stack) | The host through node-exporter, every pod and container through the kubelet, the cluster's own state through kube-state-metrics, and every app's ServiceMonitor or PodMonitor | 15 days, capped at 8 GB |
 | Loki, fed by Alloy | The logs of every pod, labelled with `namespace`, `pod`, `container` and `app` | 30 days |
-| Grafana alerting | Rules on host memory, swap and disk, memory stalls, the node going NotReady, container restarts, cluster-wide restart storms, stuck pods, Deployments missing replicas and scrape targets that are down. Sent by email | |
+| Grafana alerting | Rules on host memory, swap and disk, memory stalls, the node going NotReady, container restarts, cluster-wide restart storms, stuck pods, CronJobs whose last run failed, Deployments missing replicas and scrape targets that are down. Sent by email | |
 | GlitchTip (https://mnt.beyouweb.com) | Error tracking, uptime monitors on each component's health endpoint, heartbeats for the scheduled jobs and backups | 30 days |
 
 - **Dashboards** are ConfigMaps labelled `grafana_dashboard: "1"`, in any namespace. The `grafana_folder` annotation picks the folder.
